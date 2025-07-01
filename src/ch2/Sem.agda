@@ -117,7 +117,7 @@ _ = hereₘ refl
 
 modify : ⦃ d : is-discrete A ⦄
        → A → Bool → Val A → Val A
-modify x a v y = if y =? x then a else v y 
+modify x a v y = if y =? x then a else v y
 
 on-all-vals : ⦃ d : is-discrete A ⦄
             → (Val A → B)
@@ -194,15 +194,15 @@ sub1 = sngl "p" (And (Atom "p") (Atom "q"))
 frm3 : String
 frm3 = "p /\\ q /\\ p /\\ q"
 
-_ : "(p ∧ q) ∧ q ∧ (p ∧ q) ∧ q" ∈ ((prettyF ∘ psubst sub1) <$> parseForm frm3)
-_ = hereₘ refl
+_ : "(p ∧ q) ∧ q ∧ (p ∧ q) ∧ q" ＝ ppF (psubst sub1) frm3
+_ = refl
 -}
 
 eval-subst-sngl : {x : Var} {p q : Form} {v : Val Var}
                 → eval (psubst (sngl x q) p) v ＝ eval p (modify x (eval q v) v)
 eval-subst-sngl     {p = False}          = refl
 eval-subst-sngl     {p = True}           = refl
-eval-subst-sngl {x} {p = Atom a} {q} {v} = 
+eval-subst-sngl {x} {p = Atom a} {q} {v} =
   Dec.elim
    {C = λ z → eval (psubst (sngl x q) (Atom a)) v ＝ (if ⌊ z ⌋ then eval q v else v a)}
    (λ a=x → ap (λ z → eval (from-just (Atom a) z) v)
@@ -248,7 +248,6 @@ _ = hereₘ refl
 -- TODO eval-singl-agree
 
 {-
-
 imp-bot-forms : List String
 imp-bot-forms = "true <=> false => false"
               ∷ "~p <=> p => false"
@@ -259,7 +258,6 @@ imp-bot-forms = "true <=> false => false"
 
 _ : All (true ∈_) ((map tautology ∘ parseForm) <$> imp-bot-forms)
 _ = hereₘ refl ∷ hereₘ refl ∷ hereₘ refl ∷ hereₘ refl ∷ hereₘ refl ∷ []
-
 -}
 
 -- duality (kinda pointless)
@@ -279,7 +277,7 @@ emb (AtomD a)  = Atom a
 emb (NotD x)   = Not (emb x)
 emb (AndD x y) = And (emb x) (emb y)
 emb (OrD x y)  = Or (emb x) (emb y)
-   
+
 dual : FormulaD A → FormulaD A
 dual  FalseD    = TrueD
 dual  TrueD     = FalseD

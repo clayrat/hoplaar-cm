@@ -43,7 +43,7 @@ private variable
 all-sets : (n : ℕ)  → List A → List (Vec A n)
 all-sets    zero      _      = [] ∷ []
 all-sets   (suc _)    []     = []
-all-sets n@(suc n-1) (h ∷ t) = map (h ∷_) (all-sets n-1 t) List.++ all-sets n t  
+all-sets n@(suc n-1) (h ∷ t) = map (h ∷_) (all-sets n-1 t) List.++ all-sets n t
 
 ramsey : ℕ → ℕ → ℕ → Form
 ramsey s t n =
@@ -147,13 +147,13 @@ carry-select {A} k =
                             (offset k s0) (offset k s1) (offset k c)  (offset k s))
                (Dec-⊎ ⦃ da = <-dec {x = k′} {x = k} ⦄ ⦃ db = k ≟ 0 ⦄)
   where
-  decr : ∀ {n} → ¬ (min n k < k) ⊎ (k ＝ 0) → n ∸ k < n   
+  decr : ∀ {n} → ¬ (min n k < k) ⊎ (k ＝ 0) → n ∸ k < n
   decr {n} k′≮k×n≠0 =
     let 0<k = ≱→< (k′≮k×n≠0 ∘ inr ∘ ≤0→=0)
         0<n = <-≤-trans 0<k $ ≤-trans (≯→≤ (k′≮k×n≠0 ∘ inl)) ∩≤l
-      in 
+      in
     <-∸-l-≃ {m = n} {n = k} 0<n ⁻¹ $ <-+-0lr 0<k
-  
+
 mk-adder-test : ℕ → ℕ → Form
 mk-adder-test n k =
   let x  = mk-ix "X"
@@ -166,7 +166,7 @@ mk-adder-test n k =
       s1 = mk-ix "S1"
       c2 = mk-ix "C2"
       s2 = mk-ix "S2"
-   in      
+   in
   Imp (And (And (carry-select k n x y c0 c1 s0 s1 c s)
                 (Not (c 0)))
            (ripple-carry0 x y c2 s2 n))
@@ -209,7 +209,7 @@ bitlength =
             (λ n≠0 → suc $ ih .call {m = n ÷2} (decr n≠0))
             (n ≟ 0)
   where
-  decr : ∀ {n} → n ≠ 0 → (n ÷2) < n 
+  decr : ∀ {n} → n ≠ 0 → (n ÷2) < n
   decr {n} n≠0 =
     <-÷×2 n n ⁻¹ $
     subst (_< (n ×2)) (·-id-r n) $
@@ -230,7 +230,7 @@ prime p =
       y   = mk-ix  "Y"
       out = mk-ix  "OUT"
       u   = mk-ix2 "U"
-      v   = mk-ix2 "V"      
+      v   = mk-ix2 "V"
       m : ℕ → ℕ → Form
       m i j = And (x i) (y j)
       n = bitlength p
@@ -239,7 +239,7 @@ prime p =
            (congruent-to out p (max n (2 · n ∸ 2))))
 
 main : Main
-main = run $ do 
+main = run $ do
 --                put-str-ln $ prettyF $ ramsey 3 3 4
 --                put-str-ln $ "tautology(ramsey 3 3 5): "
 --                         ++ₛ (show $ tautology $ ramsey 3 3 5)

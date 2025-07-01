@@ -7,7 +7,7 @@ open import Logic.Discreteness
 
 open import Data.Unit
 open import Data.Empty
-open import Data.Bool 
+open import Data.Bool
 open import Data.Reflects as Reflects
 open import Data.Dec
 open import Data.Char
@@ -82,7 +82,7 @@ pos≠neg p = subst is-pos p tt
 Lit-= : (A → A → Bool)
       → Lit A → Lit A → Bool
 Lit-= e (Pos x) (Pos y) = e x y
-Lit-= e (Pos x) (Neg y) = false 
+Lit-= e (Pos x) (Neg y) = false
 Lit-= e (Neg x) (Pos y) = false
 Lit-= e (Neg x) (Neg y) = e x y
 
@@ -152,7 +152,7 @@ mutual
   nnfNot (Iff x y) = OrF (AndF (nnf x) (nnfNot y)) (AndF (nnfNot x) (nnf y))
 
 nnf0 : Formula A → NNF A
-nnf0 = nnf ∘ psimplify     
+nnf0 = nnf ∘ psimplify
 
 {-
 fm : Maybe Form
@@ -244,16 +244,18 @@ dnf-naive : ⦃ d : is-discrete A ⦄
           → Formula A → Formula A
 dnf-naive f =
   let ps = atoms f
-      sv = all-sat-vals (eval f) (λ _ → false) ps 
+      sv = all-sat-vals (eval f) (λ _ → false) ps
     in
   list-disj $
-  map (mklits (map Atom ps)) sv     
+  map (mklits (map Atom ps)) sv
 
+{-
 fm1 : String
 fm1 = "(p \\/ q /\\ r) /\\ (~p \\/ ~r)"
 
 fmP : Maybe Form
 fmP = parseForm fm1
+-}
 
 {-
 _ : "(p ∨ q ∧ r) ∧ (¬p ∨ ¬r)" ∈ (prettyF <$> fmP)
@@ -333,9 +335,10 @@ dnf : ⦃ d : is-discrete A ⦄
     → Formula A → Formula A
 dnf = dnf→form ∘ simpdnf
 
+{-
 fmpD : Maybe Form
 fmpD = dnf <$> fmP
-
+-}
 {-
 _ : "p ∧ ¬r ∨ q ∧ r ∧ ¬p" ∈ (prettyF <$> fmpD)
 _ = hereₘ refl
@@ -370,9 +373,10 @@ cnf : ⦃ d : is-discrete A ⦄
     → Formula A → Formula A
 cnf = cnf→form ∘ simpcnf
 
+{-
 fmpC : Maybe Form
 fmpC = cnf <$> fmP
-
+-}
 {-
 _ : "(p ∨ q) ∧ (p ∨ r) ∧ (¬p ∨ ¬r)" ∈ (prettyF <$> fmpC)
 _ = hereₘ refl
@@ -382,4 +386,4 @@ _ = hereₘ refl
 -}
 
 -- main : Main
--- main = run $ do put-str-ln $ Maybe.rec "" truth-table fmP 
+-- main = run $ do put-str-ln $ Maybe.rec "" truth-table fmP

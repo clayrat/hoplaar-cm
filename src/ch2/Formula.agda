@@ -86,7 +86,7 @@ Form-= e (Imp x1 y1) (Imp x2 y2) = Form-= e x1 x2 and Form-= e y1 y2
 Form-= e (Iff x1 y1) (Iff x2 y2) = Form-= e x1 x2 and Form-= e y1 y2
 Form-= e  _           _          = false
 
-instance 
+instance
   Reflects-Form-= : {e : A → A → Bool} ⦃ r : ∀ {x y} → Reflects (x ＝ y) (e x y) ⦄
                     {f g : Formula A}
                   → Reflects (f ＝ g) (Form-= e f g)
@@ -236,8 +236,16 @@ record PForm (P : Parameters 0ℓ) (n : ℕ) : 𝒰 (Effect.adj (Parameters.M P)
 
 open PForm
 
+-- TODO move
+
 ch : Parameters 0ℓ
 ch = chars {ℓb = 0ℓ} {E = ⊤ℓ} {A = ⊥ℓ} ⦃ bd = Bind-Id ⦄
+
+parseℕ : String → Maybe ℕ
+parseℕ = parseM {P = ch} ⦃ ch = choice-agdarsecT ⦄ decimalℕ
+  where
+   instance _ = Bind-Id
+
 
 pForm : ∀[ PForm ch ]
 pForm = INS.fix (PForm ch) $
@@ -314,6 +322,8 @@ prettyForm p (Iff x y) = brk (2 <? p) ((sep ((prettyForm 3 x ◈ charD '⇔') �
 prettyF : Form → String
 prettyF = render ∘ prettyForm 0
 
+ppF : (Form → Form) → String → String
+ppF f s = Maybe.rec "parse error" (prettyF ∘ f) (parseForm s)
 {-
 -- tests
 
