@@ -3,6 +3,7 @@ module ch2.NF where
 
 open import Foundations.Prelude
 open import Meta.Effect hiding (_>>_ ; _>>=_)
+open import Meta.Show
 open import Logic.Discreteness
 open import System.Everything hiding (_<$>_)
 
@@ -99,6 +100,11 @@ instance
   Lit-is-discrete : ⦃ d : is-discrete A ⦄ → is-discrete (Lit A)
   Lit-is-discrete ⦃ d ⦄ {x} {y} .does  = Lit-= (λ x y → d {x = x} {y = y} .does) x y
   Lit-is-discrete ⦃ d ⦄         .proof = Reflects-lit (d .proof)
+
+  Show-lit : ⦃ s : Show A ⦄ → Show (Lit A)
+  Show-lit = default-show λ where
+                              (Pos x) → show x
+                              (Neg x) → "¬" ++ₛ show x
 
 negative : Lit A → Bool
 negative (Neg _) = true

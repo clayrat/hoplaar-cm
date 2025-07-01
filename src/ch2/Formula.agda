@@ -339,15 +339,15 @@ _ = refl
 
 f2 : Form
 f2 = Iff (Imp (Atom "p") (Atom "q"))
-        (Or (And (Atom "r") (Atom "s"))
-            (Iff (Atom "t")
-                 (And (Not (Not (Atom "u"))) (Atom "v"))))
-{-
-_ : "p => q <=> r /\\ s \\/ (t <=> ~ ~u /\\ v)" ∈F
-_ =  !
--}
+         (Or (And (Atom "r") (Atom "s"))
+             (Iff (Atom "t")
+                  (And (Not (Not (Atom "u")))
+                       (Atom "v"))))
 
-_ : pretty f2 ＝ "p ⇒ q ⇔ r ∧ s ∨ (t ⇔ ¬(¬u) ∧ v)"
+_ : "p => q <=> r /\\ s \\/ (t <=> ~ ~u /\\ v)" ∈F
+_ = f2 !
+
+_ : prettyF f2 ＝ "p ⇒ q ⇔ r ∧ s ∨ (t ⇔ ¬(¬u) ∧ v)"
 _ = refl
 
 main : Main

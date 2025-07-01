@@ -89,7 +89,7 @@ mk-defcnf fn fm =
   unions (simpcnf fm'' ∷ map simpcnf deflist)
 
 defcnf : Form → Form
-defcnf = list-conj ∘ map (list-disj ∘ map lit→form) ∘ mk-defcnf maincnf
+defcnf = cnf→form ∘ mk-defcnf maincnf
 
 -- optimizations
 
@@ -125,7 +125,7 @@ defcnfs : Form → CNF Var
 defcnfs = mk-defcnf and-cnf
 
 defcnf' : Form → Form
-defcnf' = list-conj ∘ map (list-disj ∘ map lit→form) ∘ defcnfs
+defcnf' = cnf→form ∘ defcnfs
 
 -- 3-CNF
 
@@ -143,7 +143,7 @@ mutual
   and-cnf3  f        = maincnf f
 
 defcnf3 : Form → Form
-defcnf3 = list-conj ∘ map (list-disj ∘ map lit→form) ∘ mk-defcnf and-cnf3
+defcnf3 = cnf→form ∘ mk-defcnf and-cnf3
 
 {-
 fm0 : String
