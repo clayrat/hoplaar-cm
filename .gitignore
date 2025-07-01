@@ -1,0 +1,12 @@
+Everything.agda
+*.agda~
+*.agda#
+_build
+tags
+/html
+/src/MAlonzo/
+/src/Formula
+/src/Sem
+/src/NF
+/src/Appl
+/src/CNF
