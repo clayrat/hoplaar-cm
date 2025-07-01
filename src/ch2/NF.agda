@@ -4,6 +4,7 @@ module ch2.NF where
 open import Foundations.Prelude
 open import Meta.Effect hiding (_>>_ ; _>>=_)
 open import Logic.Discreteness
+open import System.Everything hiding (_<$>_)
 
 open import Data.Unit
 open import Data.Empty
@@ -17,9 +18,9 @@ open import Data.Maybe.Correspondences.Unary.Any renaming (here to hereₘ)
 open import Data.List as List
 open import Data.List.Operations.Discrete
 
-open import System.Everything hiding (_<$>_)
-
 open import Data.List.NonEmpty as List⁺
+
+open import ListSet
 open import ch2.Formula
 open import ch2.Sem
 
@@ -113,6 +114,12 @@ negate (Pos p) = Neg p
 lit→form : Lit A → Formula A
 lit→form (Pos a) = Atom a
 lit→form (Neg a) = Not (Atom a)
+
+trivial? : ⦃ d : is-discrete A ⦄
+         → List (Lit A) → Bool
+trivial? c =
+  let (p , n) = span positive c in
+  is-cons? $ intersect p $ image negate n
 
 -- NNF
 
@@ -293,7 +300,7 @@ dnf→form = list-disj ∘ map (list-conj ∘ map lit→form)
 
 distrib : ⦃ d : is-discrete A ⦄
         → DNF A → DNF A → DNF A
-distrib s1 s2 = nub _=?_ $ map² _++_ s1 s2
+distrib s1 s2 = nub _=?_ $ map² union s1 s2 -- TODO better names / API
 
 purednf : ⦃ d : is-discrete A ⦄
         → NNF A → DNF A
@@ -301,7 +308,7 @@ purednf (LitF l)   = (l ∷ []) ∷ []
 purednf  TrueF     = [] ∷ []
 purednf  FalseF    = []
 purednf (AndF x y) = distrib (purednf x) (purednf y)
-purednf (OrF x y)  = purednf x ++ purednf y
+purednf (OrF x y)  = union (purednf x) (purednf y)
 
 {-
 _ : (  (Pos "p" ∷ Neg "p" ∷ [])
@@ -310,15 +317,7 @@ _ : (  (Pos "p" ∷ Neg "p" ∷ [])
      ∷ (Pos "q" ∷ Pos "r" ∷ Neg "r" ∷ [])
      ∷ []) ∈ (purednf ∘ nnf <$> fmP)
 _ = hereₘ refl
--}
 
-trivial? : ⦃ d : is-discrete A ⦄
-         → Conjunct A → Bool
-trivial? c =
-  let (p , n) = span positive c in
-  is-cons? $ intersect p (nub _=?_ $ map negate n)
-
-{-
 _ : (  (Pos "p" ∷ Neg "r" ∷ [])
      ∷ (Pos "q" ∷ Pos "r" ∷ Neg "p" ∷ [])
      ∷ []) ∈ (filter (not ∘ trivial?) ∘ purednf ∘ nnf <$> fmP)
@@ -361,7 +360,7 @@ cnf→form = list-conj ∘ map (list-disj ∘ map lit→form)
 
 purecnf : ⦃ d : is-discrete A ⦄
         → Formula A → CNF A
-purecnf = nub _=?_ ∘ map (nub _=?_ ∘ map negate) ∘ purednf ∘ nnfNot
+purecnf = image (image negate) ∘ purednf ∘ nnfNot
 
 simpcnf : ⦃ d : is-discrete A ⦄
         → Formula A → CNF A

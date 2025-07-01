@@ -123,6 +123,13 @@ carry-select-ty A = Fgen A → Fgen A → Fgen A → Fgen A
                   → Fgen A → Fgen A → Fgen A → Fgen A
                   → Formula A
 
+carry-select-decr : ∀ {n k} → ¬ (min n k < k) ⊎ (k ＝ 0) → n ∸ k < n
+carry-select-decr {n} {k} k′≮k×n≠0 =
+  let 0<k = ≱→< (k′≮k×n≠0 ∘ inr ∘ ≤0→=0)
+      0<n = <-≤-trans 0<k $ ≤-trans (≯→≤ (k′≮k×n≠0 ∘ inl)) ∩≤l
+    in
+  <-∸-l-≃ {m = n} {n = k} 0<n ⁻¹ $ <-+-0lr 0<k
+
 -- NB: k is first (it's fixed), n is second
 carry-select : ℕ → ℕ → carry-select-ty A
 carry-select {A} k =
@@ -142,17 +149,10 @@ carry-select {A} k =
        Dec.rec (λ _ → fm)
                (λ k′≮k×n≠0 →
                    And fm $
-                   ih .call {m = n ∸ k} (decr k′≮k×n≠0)
+                   ih .call {m = n ∸ k} (carry-select-decr k′≮k×n≠0)
                             (offset k x)  (offset k y)  (offset k c0) (offset k c1)
                             (offset k s0) (offset k s1) (offset k c)  (offset k s))
                (Dec-⊎ ⦃ da = <-dec {x = k′} {x = k} ⦄ ⦃ db = k ≟ 0 ⦄)
-  where
-  decr : ∀ {n} → ¬ (min n k < k) ⊎ (k ＝ 0) → n ∸ k < n
-  decr {n} k′≮k×n≠0 =
-    let 0<k = ≱→< (k′≮k×n≠0 ∘ inr ∘ ≤0→=0)
-        0<n = <-≤-trans 0<k $ ≤-trans (≯→≤ (k′≮k×n≠0 ∘ inl)) ∩≤l
-      in
-    <-∸-l-≃ {m = n} {n = k} 0<n ⁻¹ $ <-+-0lr 0<k
 
 mk-adder-test : ℕ → ℕ → Form
 mk-adder-test n k =
@@ -202,18 +202,18 @@ multiplier x u v out n =
 
 -- primality and factorizaton
 
+bitlength-decr : ∀ {n} → n ≠ 0 → (n ÷2) < n
+bitlength-decr {n} n≠0 =
+  <-÷×2 n n ⁻¹ $
+  subst (_< (n ×2)) (·-id-r n) $
+  <≃<·l ⁻¹ $ (<≃≱ ⁻¹ $ contra ≤0→=0 n≠0) , s<s z<s
+
 bitlength : ℕ → ℕ
 bitlength =
   fixΠ (λ _ → ℕ) λ n ih →
     Dec.rec (λ _ → 0)
-            (λ n≠0 → suc $ ih .call {m = n ÷2} (decr n≠0))
+            (λ n≠0 → suc $ ih .call {m = n ÷2} (bitlength-decr n≠0))
             (n ≟ 0)
-  where
-  decr : ∀ {n} → n ≠ 0 → (n ÷2) < n
-  decr {n} n≠0 =
-    <-÷×2 n n ⁻¹ $
-    subst (_< (n ×2)) (·-id-r n) $
-    <≃<·l ⁻¹ $ (<≃≱ ⁻¹ $ contra ≤0→=0 n≠0) , s<s z<s
 
 bit-n : ℕ → ℕ → Bool
 bit-n  zero   x = odd x
@@ -238,6 +238,7 @@ prime p =
   Not (And (multiplier m u v out (pred n))
            (congruent-to out p (max n (2 · n ∸ 2))))
 
+{-
 main : Main
 main = run $ do
 --                put-str-ln $ prettyF $ ramsey 3 3 4
@@ -262,4 +263,4 @@ main = run $ do
                          ++ₛ (show $ tautology $ prime 9)
                 put-str-ln $ "tautology(prime 11): "
                          ++ₛ (show $ tautology $ prime 11)
-
+-}

@@ -313,17 +313,18 @@ prettyForm : ℕ → Form → Doc
 prettyForm p False     = textD "false"
 prettyForm p True      = textD "true"
 prettyForm p (Atom v)  = textD v
-prettyForm p (Not x)   = brk (10 <? p) (charD '¬' ◆ prettyForm 11 x)
-prettyForm p (And x y) = brk (8 <? p) (sep ((prettyForm 9 x ◈ charD '∧') ∷ prettyForm 8 y ∷ []))
-prettyForm p (Or x y)  = brk (6 <? p) (sep ((prettyForm 7 x ◈ charD '∨') ∷ prettyForm 6 y ∷ []))
-prettyForm p (Imp x y) = brk (4 <? p) (sep ((prettyForm 5 x ◈ charD '⇒') ∷ prettyForm 4 y ∷ []))
-prettyForm p (Iff x y) = brk (2 <? p) ((sep ((prettyForm 3 x ◈ charD '⇔') ∷ prettyForm 2 y ∷ [])))
+prettyForm p (Not x)   = brk (10 <? p) $ charD '¬' ◆ prettyForm 11 x
+prettyForm p (And x y) = brk (8 <? p) $ sep $ (prettyForm 9 x ◈ charD '∧') ∷ prettyForm 8 y ∷ []
+prettyForm p (Or x y)  = brk (6 <? p) $ sep $ (prettyForm 7 x ◈ charD '∨') ∷ prettyForm 6 y ∷ []
+prettyForm p (Imp x y) = brk (4 <? p) $ sep $ (prettyForm 5 x ◈ charD '⇒') ∷ prettyForm 4 y ∷ []
+prettyForm p (Iff x y) = brk (2 <? p) $ sep $ (prettyForm 3 x ◈ charD '⇔') ∷ prettyForm 2 y ∷ []
 
 prettyF : Form → String
 prettyF = render ∘ prettyForm 0
 
 ppF : (Form → Form) → String → String
 ppF f s = Maybe.rec "parse error" (prettyF ∘ f) (parseForm s)
+
 {-
 -- tests
 

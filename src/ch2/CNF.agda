@@ -20,6 +20,8 @@ open import Order.Constructions.Minmax
 open import Order.Constructions.Nat
 open decminmax ℕ-dec-total
 
+open import FMap
+open import ListSet
 open import ch2.Formula
 open import ch2.Sem
 open import ch2.NF
@@ -38,32 +40,16 @@ _ = hereₘ refl
 mk-prop : State ℕ Form
 mk-prop .run-stateT n = suc n , Atom ("p_" ++ₛ show-ℕ n)
 
--- TODO use a listmap from unification?
-FMap : 𝒰
-FMap = (Form → Maybe (Form × Form)) × List Form
-
-emp : FMap
-emp = (λ _ → nothing) , []
-
-upd : Form → Form × Form → FMap → FMap
-upd k v (mf , md) = (λ x → if x =? k then just v else mf x) , k ∷ md
-
-lup : FMap → Form → Maybe (Form × Form)
-lup (mf , _) = mf
-
-dom : FMap → List Form
-dom (_ , md) = md
-
-codom : FMap → List (Form × Form)
-codom (mf , md) = md >>=ᵐ (Maybe.rec [] (_∷ []) ∘ mf)
-
 -- definitional CNF
 
+FM : 𝒰
+FM = FMap Form (Form × Form)
+
 Trip : 𝒰
-Trip = Form × FMap × ℕ
+Trip = Form × FM × ℕ
 
 mutual
-  maincnf : Form → FMap → ℕ
+  maincnf : Form → FM → ℕ
           → Trip
   maincnf (And p q) defs n = defstep And p q defs n
   maincnf (Or p q)  defs n = defstep Or p q defs n
@@ -71,7 +57,7 @@ mutual
   maincnf  f        defs n = (f , defs , n)
 
   defstep : (Form → Form → Form)
-          → Form → Form → FMap → ℕ
+          → Form → Form → FM → ℕ
           → Trip
   defstep op p q defs n =
     let (fm1 , defs1 , n1) = maincnf p defs n
@@ -93,12 +79,7 @@ max-var-ix pfx s n =
     else (Maybe.rec n (max n) $
           parseℕ $ substring m (l ∸ m) s)
 
--- TODO move
-unions : ⦃ d : is-discrete A ⦄
-       → List (List A) → List A
-unions = nub _=?_ ∘ concat
-
-mk-defcnf : (Form → FMap → ℕ → Trip) → Form → CNF Var
+mk-defcnf : (Form → FM → ℕ → Trip) → Form → CNF Var
 mk-defcnf fn fm =
   let fm' = nenf→form $ nenf0 fm
       n = suc (over-atoms (max-var-ix "p_") fm' 0)
@@ -108,14 +89,14 @@ mk-defcnf fn fm =
   unions (simpcnf fm'' ∷ map simpcnf deflist)
 
 defcnf : Form → Form
-defcnf fm = list-conj $ map (list-disj ∘ map lit→form) (mk-defcnf maincnf fm)
+defcnf = list-conj ∘ map (list-disj ∘ map lit→form) ∘ mk-defcnf maincnf
 
 -- optimizations
 
 -- had to inline
 
 mutual
-  sub-or-cnf : Form → Form → FMap → ℕ
+  sub-or-cnf : Form → Form → FM → ℕ
              → Trip
   sub-or-cnf p q defs n =
     let (fm1 , defs1 , n1) = or-cnf p defs n
@@ -123,12 +104,12 @@ mutual
       in
     (Or fm1 fm2 , defs2 , n2)
 
-  or-cnf : Form → FMap → ℕ → Trip
+  or-cnf : Form → FM → ℕ → Trip
   or-cnf (Or p q) = sub-or-cnf p q
   or-cnf  f       = maincnf f
 
 mutual
-  sub-and-cnf : Form → Form → FMap → ℕ
+  sub-and-cnf : Form → Form → FM → ℕ
               → Trip
   sub-and-cnf p q defs n =
     let (fm1 , defs1 , n1) = and-cnf p defs n
@@ -136,17 +117,20 @@ mutual
       in
     (And fm1 fm2 , defs2 , n2)
 
-  and-cnf : Form → FMap → ℕ → Trip
+  and-cnf : Form → FM → ℕ → Trip
   and-cnf (And p q) = sub-and-cnf p q
   and-cnf  f        = or-cnf f
 
+defcnfs : Form → CNF Var
+defcnfs = mk-defcnf and-cnf
+
 defcnf' : Form → Form
-defcnf' fm = list-conj $ map (list-disj ∘ map lit→form) (mk-defcnf and-cnf fm)
+defcnf' = list-conj ∘ map (list-disj ∘ map lit→form) ∘ defcnfs
 
 -- 3-CNF
 
 mutual
-  sub-and-cnf3 : Form → Form → FMap → ℕ
+  sub-and-cnf3 : Form → Form → FM → ℕ
               → Trip
   sub-and-cnf3 p q defs n =
     let (fm1 , defs1 , n1) = and-cnf3 p defs n
@@ -154,12 +138,12 @@ mutual
       in
     (And fm1 fm2 , defs2 , n2)
 
-  and-cnf3 : Form → FMap → ℕ → Trip
+  and-cnf3 : Form → FM → ℕ → Trip
   and-cnf3 (And p q) = sub-and-cnf p q
   and-cnf3  f        = maincnf f
 
 defcnf3 : Form → Form
-defcnf3 fm = list-conj $ map (list-disj ∘ map lit→form) (mk-defcnf and-cnf3 fm)
+defcnf3 = list-conj ∘ map (list-disj ∘ map lit→form) ∘ mk-defcnf and-cnf3
 
 {-
 fm0 : String
