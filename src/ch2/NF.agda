@@ -124,7 +124,7 @@ lit→form (Neg a) = Not (Atom a)
 trivial? : ⦃ d : is-discrete A ⦄
          → List (Lit A) → Bool
 trivial? c =
-  let (p , n) = span positive c in
+  let (p , n) = partition positive c in
   is-cons? $ intersect p $ image negate n
 
 -- NNF
@@ -218,7 +218,7 @@ mutual
   nenfNot (And x y) = OrEF (nenfNot x) (nenfNot y)
   nenfNot (Or x y)  = AndEF (nenfNot x) (nenfNot y)
   nenfNot (Imp x y) = AndEF (nenf x) (nenfNot y)
-  nenfNot (Iff x y) = IffEF (nenf x) (nenf y)
+  nenfNot (Iff x y) = IffEF (nenf x) (nenfNot y)
 
 nenf0 : Formula A → NENF A
 nenf0 = nenf ∘ psimplify
