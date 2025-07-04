@@ -75,10 +75,6 @@ atomsR (Imp x y) = atomsR x ++ atomsR y
 atomsR (Iff x y) = atomsR x ++ atomsR y
 -}
 
-atoms : ⦃ d : is-discrete A ⦄
-      → Formula A → List A
-atoms = atom-union (_∷ [])
-
 {-
 atoms⊆ : {A : 𝒰}
        → (f : Formula A)

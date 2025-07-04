@@ -16,11 +16,16 @@ open import Data.Char
 open import Data.String
 open import Data.Maybe as Maybe
 open import Data.List
+open import Data.List.Correspondences.Unary.Any
 
 open import Level.Bounded
 import Induction.Nat.Strong as INS
 open import Data.List.NonEmpty as List⁺
 open import Data.List.Sized.Interface as SZ
+
+open import LFSet
+open import LFSet.Membership
+open import LFSet.Discrete
 
 open import Base 0ℓ
 open import Text.Pretty 80 public renaming (text to textD ; char to charD ; parens to parensD)
@@ -184,32 +189,153 @@ instance
   Form-is-discrete ⦃ d ⦄ {x} {y} .does  = Form-= (λ x y → d {x = x} {y = y} .does) x y
   Form-is-discrete               .proof = Reflects-Form-=
 
+elim-formula
+  : (P : Formula A → 𝒰)
+  → P False
+  → P True
+  → (∀ a → P (Atom a))
+  → (∀ {x} → P x → P (Not x))
+  → (∀ {x y} → P x → P y → P (And x y))
+  → (∀ {x y} → P x → P y → P (Or x y))
+  → (∀ {x y} → P x → P y → P (Imp x y))
+  → (∀ {x y} → P x → P y → P (Iff x y))
+  → ∀ x → P x
+elim-formula P pf pt pa pn pand por pimp piff  False    = pf
+elim-formula P pf pt pa pn pand por pimp piff  True     = pt
+elim-formula P pf pt pa pn pand por pimp piff (Atom a)  = pa a
+elim-formula P pf pt pa pn pand por pimp piff (Not x)   =
+  pn (elim-formula P pf pt pa pn pand por pimp piff x)
+elim-formula P pf pt pa pn pand por pimp piff (And x y) =
+  pand (elim-formula P pf pt pa pn pand por pimp piff x)
+       (elim-formula P pf pt pa pn pand por pimp piff y)
+elim-formula P pf pt pa pn pand por pimp piff (Or x y)  =
+  por (elim-formula P pf pt pa pn pand por pimp piff x)
+      (elim-formula P pf pt pa pn pand por pimp piff y)
+elim-formula P pf pt pa pn pand por pimp piff (Imp x y) =
+  pimp (elim-formula P pf pt pa pn pand por pimp piff x)
+       (elim-formula P pf pt pa pn pand por pimp piff y)
+elim-formula P pf pt pa pn pand por pimp piff (Iff x y) =
+  piff (elim-formula P pf pt pa pn pand por pimp piff x)
+       (elim-formula P pf pt pa pn pand por pimp piff y)
+
 on-atoms : (A → Formula B) → Formula A → Formula B
-on-atoms f  False    = False
-on-atoms f  True     = True
-on-atoms f (Atom a)  = f a
-on-atoms f (Not x)   = Not (on-atoms f x)
-on-atoms f (And x y) = And (on-atoms f x) (on-atoms f y)
-on-atoms f (Or x y)  = Or (on-atoms f x) (on-atoms f y)
-on-atoms f (Imp x y) = Imp (on-atoms f x) (on-atoms f y)
-on-atoms f (Iff x y) = Iff (on-atoms f x) (on-atoms f y)
+on-atoms {B} f =
+ elim-formula (λ _ → Formula B)
+   False True f
+   Not And Or Imp Iff
 
 over-atoms : (A → B → B) → Formula A → B → B
-over-atoms f  False    b = b
-over-atoms f  True     b = b
-over-atoms f (Atom a)  b = f a b
-over-atoms f (Not x)   b = over-atoms f x b
-over-atoms f (And x y) b = over-atoms f x (over-atoms f y b)
-over-atoms f (Or x y)  b = over-atoms f x (over-atoms f y b)
-over-atoms f (Imp x y) b = over-atoms f x (over-atoms f y b)
-over-atoms f (Iff x y) b = over-atoms f x (over-atoms f y b)
+over-atoms {B} f =
+ elim-formula (λ _ → B → B)
+   id id f
+   id
+   (λ px py → px ∘ py)
+   (λ px py → px ∘ py)
+   (λ px py → px ∘ py)
+   (λ px py → px ∘ py)
 
 atom-list : (A → List B) → Formula A → List B
 atom-list f fm = over-atoms (λ h → f h ++_) fm []
 
+atoms-list : Formula A → List A
+atoms-list = atom-list (_∷ [])
+
 atom-union : ⦃ d : is-discrete B ⦄
            → (A → List B) → Formula A → List B
 atom-union f fm = nub _=?_ $ atom-list f fm
+
+atoms : ⦃ d : is-discrete A ⦄
+      → Formula A → List A
+atoms = atom-union (_∷ [])
+
+-- TODO move to Sem ?
+
+atomsₛ : Formula A → LFSet A
+atomsₛ {A} =
+  elim-formula (λ _ → LFSet A)
+    [] [] sng
+    id _∪∷_ _∪∷_ _∪∷_ _∪∷_
+
+atoms-⊆ : ⦃ d : is-discrete A ⦄
+        → {f : Formula A}
+        → atoms-list f ⊆ atomsₛ f
+atoms-⊆ {A} {f} =
+  elim-formula (λ q → (zs : List A) → over-atoms _∷_ q zs ⊆ (LFSet.from-list zs ∪∷ atomsₛ q))
+     (λ zs {x = q} →
+        subst (q ∈_) (∪∷-id-r (LFSet.from-list zs) ⁻¹) ∘ ∈-list)
+     (λ zs {x = q} →
+        subst (q ∈_) (∪∷-id-r (LFSet.from-list zs) ⁻¹) ∘ ∈-list)
+     (λ a zs {x = q} →
+          subst (q ∈_) (  ∪∷-id-r (a ∷ LFSet.from-list zs) ⁻¹
+                        ∙ ∪∷-swap {s = LFSet.from-list zs})
+        ∘ ∈-list)
+     id
+     (λ {x} {y} hx hy zs {x = q} →
+        subst (q ∈_)
+              (  ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs) ⁻¹
+               ∙ ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ y})) ∘
+        ⊆-∪∷-r (hy zs ∘ list-∈) ∘
+        hx (over-atoms _∷_ y zs) {x = q})
+     (λ {x} {y} hx hy zs {x = q} →
+        subst (q ∈_)
+              (  ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs) ⁻¹
+               ∙ ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ y})) ∘
+        ⊆-∪∷-r (hy zs ∘ list-∈) ∘
+        hx (over-atoms _∷_ y zs) {x = q})
+     (λ {x} {y} hx hy zs {x = q} →
+        subst (q ∈_)
+              (  ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs) ⁻¹
+               ∙ ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ y})) ∘
+        ⊆-∪∷-r (hy zs ∘ list-∈) ∘
+        hx (over-atoms _∷_ y zs) {x = q})
+     (λ {x} {y} hx hy zs {x = q} →
+        subst (q ∈_)
+              (  ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs) ⁻¹
+               ∙ ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ y})) ∘
+        ⊆-∪∷-r (hy zs ∘ list-∈) ∘
+        hx (over-atoms _∷_ y zs) {x = q})
+     f
+     []
+
+atoms-⊇ : ⦃ d : is-discrete A ⦄
+        → {f : Formula A}
+        → atomsₛ f ⊆ atoms-list f
+atoms-⊇ {A} {f} =
+  elim-formula (λ q → (zs : List A) → (LFSet.from-list zs ∪∷ atomsₛ q) ⊆ over-atoms _∷_ q zs)
+     (λ zs {x = q} →
+        list-∈ ∘ subst (q ∈_) (∪∷-id-r (LFSet.from-list zs)))
+     (λ zs {x = q} →
+        list-∈ ∘ subst (q ∈_) (∪∷-id-r (LFSet.from-list zs)))
+     (λ a zs {x = q} →
+        list-∈ ∘ subst (q ∈_) (  ∪∷-swap {s = LFSet.from-list zs} ⁻¹
+                               ∙ ∪∷-id-r (a ∷ LFSet.from-list zs)))
+     id
+     (λ {x} {y} hx hy zs {x = q} →
+        hx (over-atoms _∷_ y zs) {x = q} ∘
+        ⊆-∪∷-r (∈-list ∘ hy zs) ∘
+        subst (q ∈_)
+              (  ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ x})
+               ∙ ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs)))
+     (λ {x} {y} hx hy zs {x = q} →
+        hx (over-atoms _∷_ y zs) {x = q} ∘
+        ⊆-∪∷-r (∈-list ∘ hy zs) ∘
+        subst (q ∈_)
+              (  ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ x})
+               ∙ ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs)))
+     (λ {x} {y} hx hy zs {x = q} →
+        hx (over-atoms _∷_ y zs) {x = q} ∘
+        ⊆-∪∷-r (∈-list ∘ hy zs) ∘
+        subst (q ∈_)
+              (  ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ x})
+               ∙ ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs)))
+     (λ {x} {y} hx hy zs {x = q} →
+        hx (over-atoms _∷_ y zs) {x = q} ∘
+        ⊆-∪∷-r (∈-list ∘ hy zs) ∘
+        subst (q ∈_)
+              (  ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ x})
+               ∙ ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs)))
+     f
+     []
 
 -- String vars
 
