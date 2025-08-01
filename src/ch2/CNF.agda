@@ -131,7 +131,7 @@ defcnf' = cnf→form ∘ defcnfs
 
 mutual
   sub-and-cnf3 : Form → Form → FM → ℕ
-              → Trip
+               → Trip
   sub-and-cnf3 p q defs n =
     let (fm1 , defs1 , n1) = and-cnf3 p defs n
         (fm2 , defs2 , n2) = and-cnf3 q defs1 n1
@@ -139,13 +139,12 @@ mutual
     (And fm1 fm2 , defs2 , n2)
 
   and-cnf3 : Form → FM → ℕ → Trip
-  and-cnf3 (And p q) = sub-and-cnf p q
+  and-cnf3 (And p q) = sub-and-cnf3 p q
   and-cnf3  f        = maincnf f
 
 defcnf3 : Form → Form
 defcnf3 = cnf→form ∘ mk-defcnf and-cnf3
 
-{-
 fm0 : String
 fm0 = "p <=> (q <=> r)"
 
@@ -162,4 +161,4 @@ main = run $ do put-str-ln $ ("naive cnf for " ++ₛ ppF id fm0)
                 put-str-ln $ ppF defcnf' fm
                 put-str-ln $ ("3-cnf for " ++ₛ fms)
                 put-str-ln $ ppF defcnf3 fm
--}
+
