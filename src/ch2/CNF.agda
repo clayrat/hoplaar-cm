@@ -65,7 +65,9 @@ mutual
         fm' = op fm1 fm2
       in
     Maybe.rec (let (n3 , v) = mk-prop .run-stateT n2 in
-               v , upd v (v , Iff v fm') defs2 , n3)
+                 v
+               , upd fm' (v , Iff v fm') defs2
+               , n3)
               (λ (v , _) → v , defs2 , n2)
               (lup defs2 fm')
 
