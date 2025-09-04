@@ -33,6 +33,10 @@ union-empty {xs} {ys} p =
    in
  length=0→nil xl , length=0→nil yl
 
+insert-s : ⦃ d : is-discrete A ⦄
+         → A → List A → List A
+insert-s x xs = nub _=?_ $ x ∷ xs
+
 unions : ⦃ d : is-discrete A ⦄
        → List (List A) → List A
 unions = nub _=?_ ∘ concat
