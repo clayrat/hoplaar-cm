@@ -1,4 +1,4 @@
-{-# OPTIONS --safe #-}
+-- {-# OPTIONS --safe #-}
 module FMap where
 
 open import Foundations.Prelude
@@ -31,3 +31,8 @@ dom (_ , md) = md
 
 codom : FMap A B → List B
 codom (mf , md) = md >>= (Maybe.rec [] (_∷ []) ∘ mf)
+
+defined : ⦃ d : is-discrete A ⦄
+        → FMap A B → A → Bool
+defined (_ , md) k = List.has k md
+

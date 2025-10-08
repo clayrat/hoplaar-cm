@@ -12,12 +12,12 @@ open import Data.Dec as Dec
 open import Data.Nat
 open import Data.Char
 open import Data.String
-open import Data.String.Properties.Unsafe
 open import Data.Maybe as Maybe
 open import Data.Maybe.Correspondences.Unary.Any renaming (here to hereₘ)
 open import Data.List as List
 open import Data.List.Correspondences.Unary.All
 open import Data.List.Correspondences.Unary.Any
+open import Unsafe.Data.String.Properties.Unsafe
 
 open import Order.Constructions.Minmax
 open import Order.Constructions.Nat

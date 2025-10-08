@@ -6,6 +6,8 @@ open import Meta.Effect
 open import Logic.Discreteness
 open import Functions.Embedding
 
+open import Data.Empty
+open import Data.Bool
 open import Data.Reflects
 open import Data.Dec
 open import Data.Nat.Properties
@@ -41,6 +43,12 @@ unions : ⦃ d : is-discrete A ⦄
        → List (List A) → List A
 unions = nub _=?_ ∘ concat
 
+unions-∈ : ⦃ d : is-discrete A ⦄
+         → {xss : List (List A)} {x : A}
+         → x ∈ unions xss
+         → Σ[ xs ꞉ List A ] (xs ∈ xss × x ∈ xs)
+unions-∈ = ∈-concat ∘ ope→subset nub-ope
+
 image : ⦃ d : is-discrete B ⦄
       → (A → B) → List A → List B
 image f = nub _=?_ ∘ map f
@@ -63,3 +71,19 @@ image-∈ : ⦃ d : is-discrete B ⦄
         → f x ∈ image f xs → x ∈ xs
 image-∈ finj = map-∈ _ finj ∘ ope→subset nub-ope
 
+image-∈Σ : ⦃ d : is-discrete B ⦄
+         → {f : A → B} {y : B} {xs : List A}
+         → y ∈ image f xs → Σ[ x ꞉ A ] ((x ∈ xs) × (y ＝ f x))
+image-∈Σ {f} = map-∈Σ f ∘ ope→subset nub-ope
+
+subtract : ⦃ d : is-discrete A ⦄
+         → List A → List A → List A
+subtract xs ys = nub _=?_ $ diff xs ys
+
+subtract-∈ : ⦃ d : is-discrete A ⦄
+           → {xs ys : List A} {y : A}
+           → y ∈ subtract xs ys → y ∈ xs × y ∉ ys
+subtract-∈ {xs} {ys} y∈s =
+  let y∈′ = filter-∈ {p = λ x → not (has x ys)} {xs = xs} $
+            ope→subset {ys = diff xs ys} nub-ope y∈s in
+  snd y∈′ , λ y∈ → so-not (fst y∈′) (true→so! y∈)

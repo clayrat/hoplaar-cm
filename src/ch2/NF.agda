@@ -113,6 +113,10 @@ negative  _      = false
 positive : Lit A → Bool
 positive = not ∘ negative
 
+abs : Lit A → Lit A
+abs (Neg p) = Pos p
+abs (Pos p) = Pos p
+
 negate : Lit A → Lit A
 negate (Neg p) = Pos p
 negate (Pos p) = Neg p

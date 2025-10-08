@@ -24,6 +24,7 @@ open decminmax ℕ-dec-total
 open import Data.List.NonEmpty as List⁺
 
 open import ListSet
+open import FMap
 open import ch2.Formula
 open import ch2.Sem
 open import ch2.NF
@@ -68,10 +69,86 @@ dpllsat = dpll ∘ defcnfs
 dplltaut : Form → Bool
 dplltaut = not ∘ dpllsat ∘ Not
 
+-- iterative
+
+data Trailmix : 𝒰 where
+  guessed deduced : Trailmix
+
+Trail : 𝒰 → 𝒰
+Trail A = List (Lit A × Trailmix)
+
+backtrack : Trail A → Trail A
+backtrack   []                   = []
+backtrack   ((_ , deduced) ∷ xs) = backtrack xs
+backtrack t@((p , guessed) ∷ xs) = t
+
+unassigned : ⦃ d : is-discrete A ⦄
+           → CNF A → Trail A → List (Lit A)
+unassigned cls trail =
+  subtract
+    (unions (image (image abs) cls))
+    (image (abs ∘ fst) trail)
+
+-- TODO use ListSet instead of FMap Lit ⊤
+{-# TERMINATING #-}
+unit-subpropagate-iter : ⦃ d : is-discrete A ⦄
+                       → CNF A → FMap (Lit A) ⊤ → Trail A
+                       → CNF A × FMap (Lit A) ⊤ × Trail A
+unit-subpropagate-iter cls fn tr =
+  let cls' = map (filter (not ∘ defined fn ∘ negate)) cls
+      newunits = unions (filter (λ where
+                                     [] → false
+                                     (x ∷ []) → not (defined fn x)
+                                     (_ ∷ _ ∷ _) → false)
+                                 cls')
+    in
+  if is-nil? newunits
+     then cls' , fn , tr
+          -- why not just map (_, deduced) newunits ++ tr ?
+     else let tr' = List.rec tr (λ p → (p , deduced) ∷_) newunits
+              fn' = List.rec fn (λ u → upd u tt) newunits
+            in
+          unit-subpropagate-iter cls' fn' tr'
+
+unit-propagate-iter : ⦃ d : is-discrete A ⦄
+                    → CNF A → Trail A
+                    → CNF A × Trail A
+unit-propagate-iter cls tr =
+  let fn = List.rec emp (λ x → upd (x .fst) tt) tr
+      (cls' , fn' , tr') = unit-subpropagate-iter cls fn tr
+    in
+  cls' , tr'
+
+{-# TERMINATING #-}
+dpli : ⦃ d : is-discrete A ⦄
+     → CNF A → Trail A → Bool
+dpli cls tr =
+  let (cls' , tr') = unit-propagate-iter cls tr in
+  if List.has [] cls'
+     then Maybe.rec false (λ where
+                               ((p , guessed) , trr) →
+                                   dpli cls ((negate p , deduced) ∷ trr)
+                               ((_ , deduced) , _)   → false   -- impossible
+                          ) (unconsᵐ (backtrack tr))
+     else
+       let ps = unassigned cls tr' in
+       if is-nil? ps
+         then true
+         else let lcounts = map (posneg-count cls') ps in
+              Maybe.rec true -- unreachable
+                (λ p → dpli cls ((p , guessed) ∷ tr')) $
+                map (snd ∘ foldr₁ (max-on fst)) $
+                from-list lcounts
+
+dplisat : Form → Bool
+dplisat fm = dpli (defcnfs fm) []
+
+dplitaut : Form → Bool
+dplitaut = not ∘ dplisat ∘ Not
+
 main : Main
 main =
   run $
-  do -- put-str-ln $ "prime        11: " ++ₛ (show $ tautology $ prime 11)
-     put-str-ln $ "prime (DPLL) 131: " ++ₛ (show $ dplltaut  $ prime 131)
-
+  do put-str-ln $ "prime (DPLL) 17: " ++ₛ (show $ dplltaut $ prime 17)
+     put-str-ln $ "prime (DPLI) 17: " ++ₛ (show $ dplitaut $ prime 17)
 
