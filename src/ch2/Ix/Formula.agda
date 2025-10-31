@@ -526,6 +526,7 @@ ppFBᵢ f = Prelude.show ∘ f ∘ chk
 
 -- tests
 
+{-
 ctx1 : LFSet String
 ctx1 = "p" ∷ "q" ∷ "r" ∷ []
 
@@ -534,8 +535,6 @@ f1 = Imp (Or (Atom "p" (hereₛ refl))
              (Atom "q" (thereₛ $ hereₛ refl)))
          (Atom "r" (thereₛ $ thereₛ $ hereₛ refl))
 
-
-{-
 _ : "p \\/ q => r" ∈F
 _ = f1 !
 

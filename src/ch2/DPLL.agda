@@ -74,6 +74,10 @@ dplltaut = not ∘ dpllsat ∘ Not
 data Trailmix : 𝒰 where
   guessed deduced : Trailmix
 
+is-guessed? : Trailmix → Bool
+is-guessed? guessed = true
+is-guessed? deduced = false
+
 Trail : 𝒰 → 𝒰
 Trail A = List (Lit A × Trailmix)
 
@@ -146,9 +150,60 @@ dplisat fm = dpli (defcnfs fm) []
 dplitaut : Form → Bool
 dplitaut = not ∘ dplisat ∘ Not
 
+-- backjumping
+
+{-# TERMINATING #-}
+backjump : ⦃ d : is-discrete A ⦄
+         → CNF A → Lit A → Trail A → Trail A
+backjump cls p tr =
+  Maybe.rec tr
+    (λ where
+        ((q , guessed) , trr) →
+            let (cls' , _) = unit-propagate-iter cls ((p , guessed) ∷ trr) in
+            if List.has [] cls' then backjump cls p trr else tr
+        ((_ , deduced) , _)   → tr  -- impossible
+    ) (unconsᵐ (backtrack tr))
+
+{-# TERMINATING #-}
+dplb : ⦃ d : is-discrete A ⦄
+     → CNF A → Trail A → Bool
+dplb cls tr =
+  let (cls' , tr') = unit-propagate-iter cls tr in
+  if List.has [] cls' then
+    Maybe.rec false
+       (λ where
+           ((p , guessed) , trr) →
+               let tr' = backjump cls p trr
+                   declits = filter (is-guessed? ∘ snd) tr'
+                   conflict = insert-s (negate p) (image (negate ∘ fst) declits)
+                 in
+               dplb (conflict ∷ cls) ((negate p , deduced) ∷ tr')
+           ((_ , deduced) , _)   → false   -- impossible
+       ) (unconsᵐ (backtrack tr))
+    else
+      let ps = unassigned cls tr' in
+      if is-nil? ps
+        then true
+        else let lcounts = map (posneg-count cls') ps in
+             Maybe.rec true -- unreachable
+               (λ p → dplb cls ((p , guessed) ∷ tr')) $
+               map (snd ∘ foldr₁ (max-on fst)) $
+               from-list lcounts
+
+dplbsat : Form → Bool
+dplbsat fm = dplb (defcnfs fm) []
+
+dplbtaut : Form → Bool
+dplbtaut = not ∘ dplbsat ∘ Not
+
+{-
 main : Main
 main =
   run $
-  do put-str-ln $ "prime (DPLL) 17: " ++ₛ (show $ dplltaut $ prime 17)
-     put-str-ln $ "prime (DPLI) 17: " ++ₛ (show $ dplitaut $ prime 17)
-
+  do -- 50 sec
+     put-str-ln $ "prime (DPLL) 101: " ++ₛ (show $ dplltaut $ prime 101)
+     -- 175 sec
+     put-str-ln $ "prime (DPLI) 101: " ++ₛ (show $ dplitaut $ prime 101)
+     -- 186 sec
+     put-str-ln $ "prime (DPLB) 101: " ++ₛ (show $ dplbtaut $ prime 101)
+-}

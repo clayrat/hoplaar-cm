@@ -153,6 +153,7 @@ fm0 = "p <=> (q <=> r)"
 fm : String
 fm = "(p \\/ (q /\\ ~r)) /\\ s"
 
+{-
 main : Main
 main = run $ do put-str-ln $ ("naive cnf for " ++ₛ ppF id fm0)
                 put-str-ln $ ppF cnf fm0
@@ -163,4 +164,4 @@ main = run $ do put-str-ln $ ("naive cnf for " ++ₛ ppF id fm0)
                 put-str-ln $ ppF defcnf' fm
                 put-str-ln $ ("3-cnf for " ++ₛ fms)
                 put-str-ln $ ppF defcnf3 fm
-
+-}

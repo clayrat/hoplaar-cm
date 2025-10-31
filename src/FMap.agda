@@ -32,6 +32,9 @@ dom (_ , md) = md
 codom : FMap A B → List B
 codom (mf , md) = md >>= (Maybe.rec [] (_∷ []) ∘ mf)
 
+graph : FMap A B → List (A × B)
+graph (mf , md) = map-maybe (λ k → map (k ,_) (mf k)) md
+
 defined : ⦃ d : is-discrete A ⦄
         → FMap A B → A → Bool
 defined (_ , md) k = List.has k md

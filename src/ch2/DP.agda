@@ -110,9 +110,10 @@ dpsat = dp ∘ defcnfs
 dptaut : Form → Bool
 dptaut = not ∘ dpsat ∘ Not
 
+{-
 main : Main
 main =
   run $
-  do put-str-ln $ "prime 11  : " ++ₛ (show $ tautology $ prime 11)
+  do -- put-str-ln $ "prime 11  : " ++ₛ (show $ tautology $ prime 11)
      put-str-ln $ "prime 11DP: " ++ₛ (show $ dptaut $ prime 11)
-
+-}
