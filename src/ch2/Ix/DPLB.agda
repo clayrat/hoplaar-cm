@@ -185,6 +185,26 @@ Trail-Inv = Uniq ∘ trail-pvars
 emp-trailinv : Trail-Inv {Γ} []
 emp-trailinv = []ᵘ
 
+push-trailinv : {tr : Trail Γ} {p : Lit Γ} {tm : Trailmix}
+              → p ∉ trail-lits tr
+              → Trail-Inv tr
+              → Trail-Inv ((p , tm) ∷ tr)
+push-trailinv p∉ ti =
+  contra (map-∈ _ unlit-positive-inj) p∉ ∷ᵘ ti
+
+prepend-trailinv : {tr tr' : Trail Γ}
+                 → Trail-Inv tr'
+                 → Trail-Inv tr
+                 → trail-lits tr' ∥ trail-lits tr
+                 → Trail-Inv (tr' ++ tr)
+prepend-trailinv {tr} {tr'} ti' ti dj =
+  subst Uniq
+        (  map-++ < unlit , positive > (trail-lits tr') _ ⁻¹
+         ∙ ap (map < unlit , positive >)
+            (trail-lits-++ {tr1 = tr'}) ⁻¹) $
+  uniq→++ ti' ti $
+  ∥-map unlit-positive-inj dj
+
 opaque
   unfolding Suffix
   suffix-trailinv : {tr0 tr : Trail Γ}
@@ -262,6 +282,26 @@ bnone→count-guessed : {tr : Trail Γ}
 bnone→count-guessed {tr = []}                 _ = refl
 bnone→count-guessed {tr = (l , guessed) ∷ tr} e = false! e
 bnone→count-guessed {tr = (l , deduced) ∷ tr} e = bnone→count-guessed {tr = tr} e
+
+bsuffix→∉ : {tr tr' : Trail Γ} {p : Lit Γ}
+          → Trail-Inv tr
+          → Backtrack-suffix {Γ} tr (p , tr')
+          → p ∉ trail-lits tr'
+bsuffix→∉ {tr'} {p} ti bsf p∈ =
+  ++→uniq
+     (subst Uniq
+            (  ap (map < unlit , positive >)
+                  (  ap trail-lits
+                        (bsf .snd .snd ∙ ++-assoc (bsf .fst) (_ ∷ []) tr'  ⁻¹)
+                   ∙ trail-lits-++ {tr1 = bsf .fst ++ _ ∷ []})
+             ∙ map-++ < unlit , positive > (trail-lits (bsf .fst ++ _ ∷ [])) (trail-lits tr')
+             ∙ ap (_++ trail-pvars tr')
+                  (  ap (map < unlit , positive >) (map-++ fst (bsf .fst) ((p , guessed) ∷ []))
+                   ∙ map-++ < unlit , positive > (trail-lits (bsf .fst)) (p ∷ [])))
+            ti)
+     .snd .snd
+     (any-++-r (here refl))
+     (List.∈-map (< unlit , positive >) p∈)
 
 bsuffix→count-guessed : {tr tr' : Trail Γ} {p : Lit Γ}
                       → Backtrack-suffix tr (p , tr')
@@ -359,7 +399,11 @@ tail-of-bsuffix {tr'} {p} ti (pr , ad , e) =
     ap (tail-of p) (ap trail-lits e ∙ trail-lits-++ {tr1 = pr})
   ∙ tail-of-++-r {z = p} {xs = trail-lits pr} {ys = p ∷ trail-lits tr'}
                  (λ p∈ →
-                      let (_ , _ , dj) = ++→uniq {xs = trail-pvars pr} (subst Uniq (ap trail-pvars e ∙ trail-pvars-++ {tr1 = pr}) ti) in
+                      let (_ , _ , dj) = ++→uniq {xs = trail-pvars pr}
+                                                 (subst Uniq
+                                                        (  ap trail-pvars e
+                                                         ∙ trail-pvars-++ {tr1 = pr})
+                                                        ti) in
                       dj (List.∈-map < unlit , positive > p∈) (here refl))
   ∙ tail-of-∷ {z = p}
 
@@ -371,6 +415,97 @@ Trail-Inv2 tr =
 
 emp-trailinv2 : Trail-Inv2 {Γ = Γ} []
 emp-trailinv2 x = false!
+
+bsuffix→negate∉ : {tr tr' : Trail Γ} {p : Lit Γ}
+                → Trail-Inv tr
+                → Trail-Inv2 tr
+                → Backtrack-suffix {Γ} tr (p , tr')
+                → negate p ∉ trail-lits tr'
+bsuffix→negate∉ {tr} {tr'} {p} ti ti2 bsf =
+  subst (negate p ∉_)
+         (  ap (λ q → tail-of p q) etr
+          ∙ tail-of-++-r (λ p∈' →
+                           ++→uniq
+                             (subst Uniq
+                                    (  ap (map < unlit , positive >) etr
+                                     ∙ map-++ < unlit , positive > (trail-lits (bsf .fst)) (p ∷ trail-lits tr'))
+                                    ti)
+                             .snd .snd
+                             (List.∈-map (< unlit , positive >) p∈')
+                             (here refl))
+          ∙ tail-of-∷ {z = p}) $
+  ti2 p $
+  subst ((p , guessed) ∈_)
+         (bsf .snd .snd ⁻¹) $
+  any-++-r (here refl)
+  where
+  etr : trail-lits tr ＝ trail-lits (bsf .fst) ++ p ∷ trail-lits tr'
+  etr =   ap trail-lits (bsf .snd .snd)
+        ∙ trail-lits-++ {tr1 = bsf .fst}
+
+
+-- TODO try proving via ≟
+push-deduced-trailinv2 : {tr : Trail Γ} {p : Lit Γ}
+                       → p ∉ trail-lits tr
+                       → Trail-Inv tr
+                       → Trail-Inv2 tr
+                       → Trail-Inv2 ((p , deduced) ∷ tr)
+push-deduced-trailinv2 {tr} {p} p∉ ti ti2 z z∈ =
+  let z∈' = any-¬here (λ e → absurd (guessed≠deduced (ap snd e))) z∈ in
+  contra (subst (negate z ∈_)
+                (tail-of-++-r $
+                 ¬any-∷ (λ z=np →
+                           uniq-uncons (push-trailinv {tm = deduced} p∉ ti) .fst $
+                           List.∈-map < unlit , positive > $
+                           List.∈-map fst $
+                           subst (λ q → (q , guessed) ∈ tr) z=np z∈')
+                        false!)) $
+  ti2 z z∈'
+
+prepend-deduced-trailinv2 : {tr tr' : Trail Γ}
+                          → All-deduced tr'
+                          → Trail-Inv tr'
+                          → Trail-Inv tr
+                          → trail-lits tr' ∥ trail-lits tr
+                          → Trail-Inv2 tr
+                          → Trail-Inv2 (tr' ++ tr)
+prepend-deduced-trailinv2 {tr} {tr'} ad ti' ti dj ti2 x x∈ =
+  subst (λ q → negate x ∉ tail-of x q)
+        (trail-lits-++ {tr1 = tr'} {tr2 = tr} ⁻¹) $
+  [ (λ am → absurd (List.All→∀∈ ad (x , guessed) am tt))
+  , (λ x∈' →
+        subst (negate x ∉_)
+              (tail-of-++-r
+                 (λ x∈m → ++→uniq (subst Uniq
+                                         (trail-pvars-++ {tr1 = tr'} {tr2 = tr})
+                                         (prepend-trailinv ti' ti dj))
+                            .snd .snd
+                            (List.∈-map _ x∈m)
+                            (List.∈-map _ (List.∈-map _ x∈'))) ⁻¹) $
+        ti2 x x∈')
+   ]ᵤ (any-split x∈)
+
+push-guessed-trailinv2 : {tr : Trail Γ} {p : Lit Γ}
+                       → negate p ∉ trail-lits tr
+                       → Trail-Inv2 tr
+                       → Trail-Inv2 ((p , guessed) ∷ tr)
+push-guessed-trailinv2 {tr} {p} np∉ ti2 z z∈ =
+  Dec.rec
+    (λ z=p →
+         subst (λ q → negate z ∉ tail-of z (q ∷ trail-lits tr))
+               z=p $
+         subst (negate z ∉_)
+               (tail-of-∷ {z = z} {xs = trail-lits tr} ⁻¹) $
+         subst (λ q → negate q ∉ trail-lits tr)
+               (z=p ⁻¹) $
+         np∉)
+    (λ z≠p →
+         contra (subst (negate z ∈_)
+                       (tail-of-++-r {xs = p ∷ []}
+                                     (¬any-∷ z≠p false!))) $
+         ti2 z $
+         any-¬here (contra (ap fst) z≠p) z∈)
+    (z ≟ p)
 
 bsuffix-trailinv2 : {tr tr' : Trail Γ} {p : Lit Γ}
                   → Backtrack-suffix {Γ} tr (p , tr')
@@ -552,17 +687,6 @@ bsuffix-drop-guessed : {tr tr' : Trail Γ} {p : Lit Γ} {n : ℕ}
 bsuffix-drop-guessed {n} bsf =
   ap (Maybe.rec [] (λ ptr → drop-guessed (ptr .snd) n)) (eq-backtrack-suffix bsf)
 
-Rejstk-Inv : Rejstk Γ → Trail Γ → 𝒰
-Rejstk-Inv {Γ} rj tr =
-  ∀ x (f : Fin (sizeₛ Γ))
-      → x ∈ lookupᵥ rj f
-      → negate x ∈ (trail-lits $ drop-guessed tr (count-guessed tr ∸ fin→ℕ f))
-
-emp-rejstkinv : Rejstk-Inv (replicateᵥ (sizeₛ Γ) []) []
-emp-rejstkinv x f x∈ =
-  false! ⦃ Refl-x∉ₛ[] ⦄ $
-  subst (x ∈ₛ_) (lookup-replicate f) x∈
-
 -- add literal to a set at given depth, empty out trailing sets
 bump-at-fun : ∀ {n} → Lit Γ → Vec (LFSet (Lit Γ)) n → ℕ → Fin n → LFSet (Lit Γ)
 bump-at-fun l r k f =
@@ -576,92 +700,16 @@ bump-at : Fin (sizeₛ Γ) → Lit Γ → Rejstk Γ → Rejstk Γ
 bump-at f l r =
   tabulate (bump-at-fun l r (fin→ℕ f))
 
-USP-ty : ℕ → 𝒰
-USP-ty x = {Γ : Ctx}
-         → CNF Γ → (tr : Trail Γ)
-         → x ＝ 2 · sizeₛ Γ ∸ length tr
-         → Trail-Inv tr
-         → Trail-Inv2 tr
-         → CNF Γ × (Σ[ tr' ꞉ Trail Γ ] (  Trail-Inv tr'
-                                        × Trail-Inv2 tr'
-                                        × USP-suffix tr' tr))
+Rejstk-Inv : Rejstk Γ → Trail Γ → 𝒰
+Rejstk-Inv {Γ} rj tr =
+  ∀ x (f : Fin (sizeₛ Γ))
+      → x ∈ lookupᵥ rj f
+      → negate x ∈ (trail-lits $ drop-guessed tr (count-guessed tr ∸ fin→ℕ f))
 
-unit-subpropagate-loop : ∀[ □ USP-ty ⇒ USP-ty ]
-unit-subpropagate-loop {x} ih {Γ} cls tr e ti ti2 =
-  Dec.rec (λ _ → cls' , tr , ti , ti2 , [] , [] , refl)
-          (λ ne → let (cls0 , tr0 , ti0 , ti20 , (pr0 , a0 , e0)) =
-                          Box.call ih (prf ne) cls' tr' refl ti' ti2'
-                  in ( cls0 , tr0 , ti0 , ti20
-                     , pr0 ++ map (_, deduced) newunits
-                     , all-++ a0 (all→map (all-trivial (λ _ → id)))
-                     , e0 ∙ ++-assoc pr0 _ tr ⁻¹))
-          (Dec-is-nil? {xs = newunits})
-  where
-  cls' = map (filter (not ∘ trail-has tr ∘ negate)) cls
-  newunits = unions (filter (is-fresh-unit-clause tr) cls')
-  tr' = map (_, deduced) newunits ++ tr
-
-  -- propositional (proof) part
-  -- TODO streamline
-  ti' : Trail-Inv tr'
-  ti' = subst Uniq (happly map-pres-comp tr') $
-        subst Uniq (map-++ (< unlit , positive > ∘ fst) _ tr ⁻¹) $
-        subst (λ q → Uniq (q (map (_, deduced) newunits) ++ q tr)) (map-pres-comp {f = fst} {g = < unlit , positive >} ⁻¹) $
-        subst (λ q → Uniq (map < unlit , positive > q ++ trail-pvars tr)) (happly map-pres-comp newunits) $
-        subst (λ q → Uniq (q ++ trail-pvars tr)) (happly map-pres-comp newunits) $
-        uniq→++
-          (uniq-map unlit-positive-inj $
-           nub-unique {R = λ _ _ → Lit-is-discrete .proof}
-                      {xs = concat (filter (is-fresh-unit-clause tr) cls')})
-          ti
-          λ {x} x∈nu x∈tr →
-           let (z , z∈ , ze) = List.map-∈Σ < unlit , positive > x∈nu
-               (zs , zs∈ , z∈') = ∈-concat {xss = filter (is-fresh-unit-clause tr) cls'}
-                                  (ope→subset {ys = concat (filter (is-fresh-unit-clause tr) cls')}
-                                    (nub-ope {cmp = _=?_}) z∈)
-               (fzs , _) = filter-∈ {p = is-fresh-unit-clause tr} {xs = cls'} zs∈
-               (lz , zse , ll) = fresh-unit-clause-prop {c = zs} fzs
-              in
-            ll (map-∈ _ unlit-positive-inj $
-                subst (_∈ trail-pvars tr)
-                      (ze ∙ ap < unlit , positive > (any-¬there false! (subst (z ∈_) zse z∈')))
-                      x∈tr)
-
-  ti2' : Trail-Inv2 tr'
-  ti2' x x∈ =
-    subst (λ q → negate x ∉ tail-of x q)
-           (trail-lits-++ {tr1 = map (_, deduced) newunits} {tr2 = tr} ⁻¹) $
-    [ (λ am → absurd (guessed≠deduced $ ap snd $ List.Any→Σ∈ (any←map am) .snd .snd))
-    , (λ x∈' →
-          subst (negate x ∉_)
-                (tail-of-++-r
-                   (λ x∈m → ++→uniq (subst Uniq
-                                           (trail-pvars-++ {tr1 = map (_, deduced) newunits} {tr2 = tr})
-                                           ti')
-                              .snd .snd
-                              (List.∈-map _ x∈m)
-                              (List.∈-map _ (List.∈-map _ x∈'))) ⁻¹) $
-          ti2 x x∈')
-    ]ᵤ (any-split x∈)
-
-  prf : newunits ≠ [] → 2 · sizeₛ Γ ∸ length tr' < x
-  prf ne =
-    <-≤-trans
-      (<-∸-2l-≃ (trail-inv≤ ti') ⁻¹ $
-       <-≤-trans
-         (<-+-0lr (<-≤-trans
-                     (≱→< $ contra (length=0→nil ∘ ≤0→=0) ne)
-                     (=→≤ (map-length ⁻¹))))
-         (=→≤ (++-length _ tr ⁻¹)))
-      (=→≤ (e ⁻¹))
-
-unit-propagate-iter : {Γ : Ctx}
-                    → CNF Γ → (tr : Trail Γ) → Trail-Inv tr → Trail-Inv2 tr
-                    → CNF Γ × (Σ[ tr' ꞉ Trail Γ ] (  Trail-Inv tr'
-                                                   × Trail-Inv2 tr'
-                                                   × USP-suffix tr' tr))
-unit-propagate-iter cls tr ti ti2 =
-  Box.fix USP-ty unit-subpropagate-loop cls tr refl ti ti2
+emp-rejstkinv : Rejstk-Inv (replicateᵥ (sizeₛ Γ) []) []
+emp-rejstkinv x f x∈ =
+  false! ⦃ Refl-x∉ₛ[] ⦄ $
+  subst (x ∈ₛ_) (lookup-replicate f) x∈
 
 -- backjumping
 
@@ -714,6 +762,248 @@ bjsuffix→suffix {tr} {tr'} bjs =
     (=→suffix bjs)
     (drop-guessed-suffix {n = count-guessed tr ∸ count-guessed tr'})
 
+-- TODO these 3 are adhoc/messy
+rejstkinv-∉ : {rj : Rejstk Γ} {tr tr0 tr' : Trail Γ} {p : Lit Γ}
+            → Backtrack-suffix tr (p , tr0)
+            → Backjump-suffix tr0 tr'
+            → (cg< : count-guessed tr' < sizeₛ Γ)
+            → Trail-Inv tr → Trail-Inv2 tr
+            → Rejstk-Inv rj tr
+            → p ∉ lookupᵥ rj (ℕ→fin (count-guessed tr') cg<)
+rejstkinv-∉ {tr} {tr0} {tr'} {p} bsf bjsf cg< ti ti2 ri p∈ =
+  ti2 p
+      (subst ((p , guessed) ∈_)
+             (bsf .snd .snd ⁻¹) $
+       any-++-r (here refl)) $
+  subst (λ q → negate p ∈ tail-of p q)
+        (etr ⁻¹) $
+  subst (negate p ∈_)
+        -- TODO copypaste
+        (tail-of-++-r (λ p∈' →
+                           ++→uniq
+                             (subst Uniq
+                                    (  ap (map < unlit , positive >) etr
+                                     ∙ map-++ < unlit , positive > (trail-lits (bsf .fst)) (p ∷ trail-lits tr0))
+                                    ti)
+                             .snd .snd
+                             (List.∈-map (< unlit , positive >) p∈')
+                             (here refl)) ⁻¹) $
+  subst (negate p ∈_)
+        (tail-of-∷ {z = p} ⁻¹) $
+  map-⊆ fst (ope→subset $ suffix→ope $ bjsuffix→suffix bjsf) $
+  subst (λ q → negate p ∈ trail-lits q)
+        (bjsf ⁻¹) $
+  subst (λ q → negate p ∈ trail-lits q)
+        (bsuffix-drop-guessed {n = count-guessed tr0 ∸ count-guessed tr'} bsf) $
+  subst (λ q → negate p ∈ trail-lits (drop-guessed tr q))
+        (+∸-assoc 1 (count-guessed tr0) (count-guessed tr')
+                    (bjsuffix-cg bjsf) ⁻¹) $
+  subst (λ q → negate p ∈ trail-lits (drop-guessed tr (q ∸ count-guessed tr')))
+        (bsuffix→count-guessed bsf) $
+  subst (λ q → negate p ∈ trail-lits (drop-guessed tr (count-guessed tr ∸ q)))
+        (ℕ→fin→ℕ (count-guessed tr') cg<) $
+        ri p (ℕ→fin (count-guessed tr') cg<) p∈
+  where
+  -- TODO copypaste from bsuffix→negate∉
+  etr : trail-lits tr ＝ trail-lits (bsf .fst) ++ p ∷ trail-lits tr0
+  etr =   ap trail-lits (bsf .snd .snd)
+        ∙ trail-lits-++ {tr1 = bsf .fst}
+
+bump-rejstkinv-deduced : {rj : Rejstk Γ} {tr tr' : Trail Γ} {p : Lit Γ}
+                       → Backjump-suffix tr tr'
+                       → (cg< : count-guessed tr' < sizeₛ Γ)
+                       → Rejstk-Inv rj tr
+                       → Rejstk-Inv (bump-at (ℕ→fin (count-guessed tr') cg<) p rj)
+                                    ((negate p , deduced) ∷ tr')
+bump-rejstkinv-deduced {Γ} {rj} {tr} {tr'} {p} bjsf cg< ri x f x∈ =
+  Dec.elim
+    {C = λ q → x ∈ₛ (if ⌊ q ⌋
+                       then lookupᵥ rj f
+                       else if fin→ℕ f == fin→ℕ z
+                              then p ∷ lookupᵥ rj f
+                              else [])
+             → negate x ∈ trail-lits (drop-guessed ((negate p , deduced) ∷ tr')
+                                                   (count-guessed tr' ∸ fin→ℕ f))}
+    (λ lt x∈ →
+         let lt' = <-≤-trans lt (=→≤ (ℕ→fin→ℕ _ cg<)) in
+         subst (λ q → negate x ∈ trail-lits q)
+                (drop-guessed-++-l {pr = (negate p , deduced) ∷ []} {tr = tr'} {n = count-guessed tr' ∸ fin→ℕ f}
+                   (id ∷ [])
+                   (∸>0≃> ⁻¹ $ lt') ⁻¹) $
+         subst (λ q → negate x ∈ trail-lits (drop-guessed q (count-guessed tr' ∸ fin→ℕ f)))
+               (bjsf ⁻¹) $
+         subst (λ q → negate x ∈ trail-lits q)
+               (drop-guessed-+ {n = count-guessed tr ∸ count-guessed tr'} {m = count-guessed tr' ∸ fin→ℕ f} ⁻¹) $
+         subst (λ q → negate x ∈ trail-lits (drop-guessed tr q))
+               (  ap (_∸ fin→ℕ f)
+                          (∸+=id (count-guessed tr') (count-guessed tr)
+                            (bjsuffix-cg bjsf) ⁻¹)
+                ∙ +∸-assoc (count-guessed tr ∸ count-guessed tr') (count-guessed tr') (fin→ℕ f)
+                           (<-weaken _ _ lt') ⁻¹) $
+         ri x f x∈)
+    (λ ge →
+         Dec.elim
+             {C = λ q → x ∈ₛ (if ⌊ q ⌋ then p ∷ lookupᵥ rj f else [])
+                      → negate x ∈ trail-lits (drop-guessed ((negate p , deduced) ∷ tr')
+                                                            (count-guessed tr' ∸ fin→ℕ f))}
+             (λ e x∈ →
+                 let e' = e ∙ ℕ→fin→ℕ _ cg< in
+                  subst (λ q → negate x ∈ trail-lits (drop-guessed ((negate p , deduced) ∷ tr') q))
+                        (  ap (count-guessed tr' ∸_) e' ⁻¹) $
+                  subst (λ q → negate x ∈ trail-lits (drop-guessed ((negate p , deduced) ∷ tr') q))
+                        (∸-cancel (count-guessed tr') ⁻¹) $
+                  [ (λ x=p → here (ap negate x=p))
+                  , (λ x∈' → there $
+                             subst (λ q → negate x ∈ trail-lits q)
+                                   (bjsf ⁻¹) $
+                             subst (λ q → negate x ∈ trail-lits (drop-guessed tr (count-guessed tr ∸ q)))
+                                   e' $
+                             ri x f x∈')
+                  ]ᵤ $
+                  ∈ₛ-∷→ x∈)
+             (λ ne → false! ⦃ Refl-x∉ₛ[] ⦄)
+             (ℕ-is-discrete {x = fin→ℕ f} {y = fin→ℕ z}))
+    (<-dec {x = fin→ℕ f} {x = fin→ℕ z})
+    (subst (x ∈_)
+           (lookup-tabulate {f = bump-at-fun p rj (fin→ℕ z)} f)
+           x∈)
+  where
+  z : Fin (sizeₛ Γ)
+  z = ℕ→fin (count-guessed tr') cg<
+
+push-rejstkinv-guessed : {rj : Rejstk Γ} {tr tr' : Trail Γ} {p : Lit Γ}
+                       → USP-suffix tr' tr
+                       → Rejstk-Inv rj tr
+                       → Rejstk-Inv rj ((p , guessed) ∷ tr')
+push-rejstkinv-guessed {tr} {tr'} {p} us ri x f x∈ =
+  let nx∈ = ri x f x∈ in
+  Dec.rec
+    (λ le →
+        subst (λ q → negate x ∈ trail-lits (drop-guessed ((p , guessed) ∷ tr') q))
+              (≤→∸=0 le ⁻¹) $
+        there $
+        subst (λ q → negate x ∈ trail-lits q)
+               (us .snd .snd ⁻¹) $
+        subst (negate x ∈_)
+              (trail-lits-++ {tr1 = us .fst} ⁻¹) $
+        any-++-r {xs = trail-lits (us .fst)} $
+        subst (λ q → negate x ∈ trail-lits (drop-guessed tr q))
+              (≤→∸=0 (=→≤ (uspsuffix→count-guessed us) ∙ ≤-ascend ∙ le)) $
+        nx∈)
+    (λ ge →
+        let le' = ≤≃<suc ⁻¹ $ ≱→< ge in
+        subst (λ q → negate x ∈ trail-lits (drop-guessed ((p , guessed) ∷ tr') q))
+              (+∸-assoc _ _ _ le') $
+        subst (λ q → negate x ∈ trail-lits (drop-guessed tr' (q ∸ fin→ℕ f)))
+              (uspsuffix→count-guessed us) $
+        subst (λ q → negate x ∈ trail-lits (drop-guessed q (count-guessed tr ∸ fin→ℕ f)))
+              (us .snd .snd ⁻¹) $
+        [ (λ lt' →
+              subst (λ q → negate x ∈ trail-lits q)
+                    (drop-guessed-++-l
+                       {pr = us .fst} {n = count-guessed tr ∸ fin→ℕ f}
+                       (us .snd .fst)
+                       (∸>0≃> ⁻¹ $ <-≤-trans lt' (=→≤ (uspsuffix→count-guessed us ⁻¹)))
+                       ⁻¹) $
+              nx∈)
+        , (λ e' →
+             let e'' = ≤→∸=0 (=→≤ (uspsuffix→count-guessed us ∙ e' ⁻¹)) in
+             subst (λ q → negate x ∈ trail-lits (drop-guessed (us .fst ++ tr) q))
+                   (e'' ⁻¹) $
+             subst (negate x ∈_)
+                   (trail-lits-++ {tr1 = us .fst} ⁻¹) $
+             any-++-r {xs = trail-lits (us .fst)} $
+             subst (λ q → negate x ∈ trail-lits (drop-guessed tr q))
+                   e'' $
+             nx∈)
+        ]ᵤ (≤→<⊎= le'))
+    (≤-dec {x = suc (count-guessed tr')} {x = fin→ℕ f})
+
+-- the algorithm
+
+USP-ty : ℕ → 𝒰
+USP-ty x = {Γ : Ctx}
+         → CNF Γ → (tr : Trail Γ)
+         → x ＝ 2 · sizeₛ Γ ∸ length tr
+         → Trail-Inv tr
+         → Trail-Inv2 tr
+         → CNF Γ × (Σ[ tr' ꞉ Trail Γ ] (  Trail-Inv tr'
+                                        × Trail-Inv2 tr'
+                                        × USP-suffix tr' tr))
+
+unit-subpropagate-loop : ∀[ □ USP-ty ⇒ USP-ty ]
+unit-subpropagate-loop {x} ih {Γ} cls tr e ti ti2 =
+  Dec.rec (λ _ →   cls' , tr
+                 , ti , ti2 , [] , [] , refl)
+          (λ ne → let (  cls0 , tr0
+                       , ti0 , ti20 , (pr0 , a0 , e0)) =
+                         Box.call ih (prf ne)
+                           cls' tr'
+                           refl ti' ti2'
+                  in ( cls0 , tr0
+                     , ti0 , ti20
+                     , (  pr0 ++ tru
+                        , all-++ a0 (all→map (all-trivial (λ _ → id)))
+                        , e0 ∙ ++-assoc pr0 _ tr ⁻¹)))
+          (Dec-is-nil? {xs = newunits})
+  where
+  cls' = map (filter (not ∘ trail-has tr ∘ negate)) cls
+  newunits = unions (filter (is-fresh-unit-clause tr) cls')
+  tru = map (_, deduced) newunits
+  tr' = tru ++ tr
+
+  -- propositional (proof) part
+  -- TODO streamline
+  nueq : trail-lits tru ＝ newunits
+  nueq = happly map-pres-comp newunits ⁻¹ ∙ happly map-pres-id newunits
+
+  tiu : Trail-Inv tru
+  tiu =
+    uniq-map unlit-positive-inj $
+    subst Uniq (nueq ⁻¹) $
+    nub-unique {R = λ _ _ → Lit-is-discrete .proof}
+               {xs = concat (filter (is-fresh-unit-clause tr) cls')}
+
+  dju : trail-lits tru ∥ trail-lits tr
+  dju =
+    subst (_∥ trail-lits tr) (nueq ⁻¹) $
+    λ {x} x∈nu x∈tr →
+     let (zs , zs∈ , x∈') = ∈-concat {xss = filter (is-fresh-unit-clause tr) cls'}
+                            (ope→subset {ys = concat (filter (is-fresh-unit-clause tr) cls')}
+                              (nub-ope {cmp = _=?_}) x∈nu)
+         (fzs , _) = filter-∈ {p = is-fresh-unit-clause tr} {xs = cls'} zs∈
+         (lz , zse , ll) = fresh-unit-clause-prop {c = zs} fzs
+        in
+      ll $
+      subst (_∈ trail-lits tr)
+            (any-¬there false! (subst (x ∈_) zse x∈'))
+            x∈tr
+
+  ti' : Trail-Inv tr'
+  ti' = prepend-trailinv tiu ti dju
+
+  ti2' : Trail-Inv2 tr'
+  ti2' = prepend-deduced-trailinv2 (all→map $ all-trivial λ _ → id) tiu ti dju ti2
+
+  prf : newunits ≠ [] → 2 · sizeₛ Γ ∸ length tr' < x
+  prf ne =
+    <-≤-trans
+      (<-∸-2l-≃ (trail-inv≤ ti') ⁻¹ $
+       <-≤-trans
+         (<-+-0lr (<-≤-trans
+                     (≱→< $ contra (length=0→nil ∘ ≤0→=0) ne)
+                     (=→≤ (map-length ⁻¹))))
+         (=→≤ (++-length _ tr ⁻¹)))
+      (=→≤ (e ⁻¹))
+
+unit-propagate-iter : {Γ : Ctx}
+                    → CNF Γ → (tr : Trail Γ) → Trail-Inv tr → Trail-Inv2 tr
+                    → CNF Γ × (Σ[ tr' ꞉ Trail Γ ] (  Trail-Inv tr'
+                                                   × Trail-Inv2 tr'
+                                                   × USP-suffix tr' tr))
+unit-propagate-iter cls tr ti ti2 =
+  Box.fix USP-ty unit-subpropagate-loop cls tr refl ti ti2
+
 BJ-ty : {Γ : Ctx} → Lit Γ → ℕ → 𝒰
 BJ-ty {Γ} p x =
     (tr : Trail Γ)
@@ -741,56 +1031,34 @@ backjump-loop-backtrack : {Γ : Ctx} → CNF Γ → (p : Lit Γ)
                         → Σ[ tr' ꞉ Trail Γ ] (Trail-Inv tr' × Trail-Inv2 tr' × Backjump-suffix tr tr')
 backjump-loop-backtrack cls p {x} ih tr e p∉ np∉ ti ti2 q trr eb =
   let (cls' , tr' , ti' , ti2' , us') = unit-propagate-iter cls ((p , guessed) ∷ trr)
-                                                            ti'''
-                                                            ti2'''
-  in
+                                          (push-trailinv {tm = guessed} p∉r tir)
+                                          (push-guessed-trailinv2 np∉r ti2r)
+   in
   if List.has [] cls'
-     then (let (tr' , ti' , ti2' , ts') = Box.call ih prf
-                                                  trr refl
-                                                  p∉' np∉'
-                                                  ti'' ti2''
-            in
-           tr' , ti' , ti2' , bjsuffix-trans (bsuffix→bjsuffix bsf) ts')
-     else tr , ti , ti2 , bjsuffix-refl
+     then
+       (let (  tr'
+             , ti' , ti2' , ts') = Box.call ih prf
+                                   trr
+                                   refl p∉r np∉r tir ti2r
+         in
+          tr'
+        , ti' , ti2'
+        , bjsuffix-trans (bsuffix→bjsuffix bsf) ts')
+     else
+       tr , ti , ti2 , bjsuffix-refl
   where
   bsf : Backtrack-suffix tr (q , trr)
   bsf = backtrack-suffix-eq eb
-  etr : trail-lits tr ＝ trail-lits (bsf .fst ++ (q , guessed) ∷ []) ++ trail-lits trr
-  etr =   ap trail-lits
-             (bsf .snd .snd ∙ ++-assoc (bsf .fst) (_ ∷ []) trr  ⁻¹)
-        ∙ trail-lits-++ {tr1 = bsf .fst ++ _ ∷ []}
-  sf : Suffix trr tr
-  sf = suffix-uncons $ bsuffix→suffix bsf
-
-  p∉' : p ∉ trail-lits trr
-  p∉' = contra (map-⊆ fst (ope→subset $ suffix→ope sf)) p∉
-  np∉' : negate p ∉ trail-lits trr
-  np∉' = contra (map-⊆ fst (ope→subset $ suffix→ope sf)) np∉
-  ti'' : Trail-Inv trr
-  ti'' = bsuffix-trailinv bsf ti
-  ti2'' : Trail-Inv2 trr
-  ti2'' = bsuffix-trailinv2 bsf ti ti2
-  ti''' : Trail-Inv ((p , guessed) ∷ trr)
-  ti''' = contra (map-∈ _ unlit-positive-inj) p∉' ∷ᵘ ti''
-  ti2''' : Trail-Inv2 ((p , guessed) ∷ trr)
-  ti2''' z z∈ =
-    Dec.rec
-      (λ z=p →
-           subst (λ q → negate z ∉ tail-of z (q ∷ trail-lits trr))
-                 z=p $
-           subst (negate z ∉_)
-                 (tail-of-∷ {z = z} {xs = trail-lits trr} ⁻¹) $
-           subst (λ q → negate q ∉ trail-lits trr)
-                 (z=p ⁻¹) $
-           np∉')
-      (λ z≠p →
-           contra (subst (negate z ∈_)
-                         (tail-of-++-r {xs = p ∷ []}
-                                       (¬any-∷ z≠p false!))) $
-           ti2'' z $
-           any-¬here (contra (ap fst) z≠p) z∈)
-      (z ≟ p)
-
+  tr⊆ : trail-lits trr ⊆ trail-lits tr
+  tr⊆ = map-⊆ fst (ope→subset $ suffix→ope $ suffix-uncons $ bsuffix→suffix bsf)
+  p∉r : p ∉ trail-lits trr
+  p∉r = contra tr⊆ p∉
+  np∉r : negate p ∉ trail-lits trr
+  np∉r = contra tr⊆ np∉
+  tir : Trail-Inv trr
+  tir = bsuffix-trailinv bsf ti
+  ti2r : Trail-Inv2 trr
+  ti2r = bsuffix-trailinv2 bsf ti ti2
   prf : length trr < x
   prf = <-≤-trans (<-≤-trans <-ascend
                              (suffix-length $ bsuffix→suffix bsf))
@@ -804,7 +1072,8 @@ backjump-loop {Γ} cls p {x} ih tr e p∉ np∉ ti ti2 =
     (λ where (q , trr) → backjump-loop-backtrack cls p ih tr e p∉ np∉ ti ti2 q trr)
     (backtrack tr) refl
 
-backjump : CNF Γ → (p : Lit Γ)
+backjump : CNF Γ
+         → (p : Lit Γ)
          → (tr : Trail Γ)
          → p ∉ trail-lits tr
          → negate p ∉ trail-lits tr
@@ -813,8 +1082,8 @@ backjump : CNF Γ → (p : Lit Γ)
 backjump cls p tr p∉ np∉ ti ti2 =
   Box.fix (BJ-ty p) (backjump-loop cls p) tr refl p∉ np∉ ti ti2
 
-TSI-ty : {Γ : Ctx} → Vec ℕ (sizeₛ Γ) × ℕ → 𝒰
-TSI-ty {Γ} (x , y) =
+DPLB-ty : {Γ : Ctx} → Vec ℕ (sizeₛ Γ) × ℕ → 𝒰
+DPLB-ty {Γ} (x , y) =
     (cls : CNF Γ)
   → (tr : Trail Γ)
   → (ti : Trail-Inv tr)
@@ -826,7 +1095,7 @@ TSI-ty {Γ} (x , y) =
   → Bool
 
 dplb-loop-backjump : ∀ {x y}
-                   → (□∷× TSI-ty) (x , y)
+                   → (□∷× DPLB-ty) (x , y)
                    → (cls : CNF Γ)
                    → (tr : Trail Γ)
                    → (ti : Trail-Inv tr)
@@ -848,9 +1117,13 @@ dplb-loop-backjump {Γ} {x} {y} ih cls tr ti ti2 rj ri ex ey p trr eb =
     (conflict ∷ cls)
     ((negate p , deduced) ∷ tr')
     --
-    ti''' ti2'''
+    (push-trailinv {tm = deduced} np∉' ti')
+    (push-deduced-trailinv2 np∉' ti' ti2')
     (bump-at bfin p rj)
-    ri''
+    (bump-rejstkinv-deduced {rj = rj}
+       (bjsuffix-trans (bsuffix→bjsuffix bsf) ts')
+       cg<
+       ri)
     refl refl
   where
   bsf : Backtrack-suffix tr (p , trr)
@@ -858,136 +1131,43 @@ dplb-loop-backjump {Γ} {x} {y} ih cls tr ti ti2 rj ri ex ey p trr eb =
                           eb
                           (backtrack-suffix {tr = tr}))
 
-  etr0 : trail-lits tr ＝ trail-lits (bsf .fst) ++ p ∷ trail-lits trr
-  etr0 =   ap trail-lits (bsf .snd .snd)
-         ∙ trail-lits-++ {tr1 = bsf .fst}
-
-  etr : trail-lits tr ＝ trail-lits (bsf .fst ++ (p , guessed) ∷ []) ++ trail-lits trr
-  etr =   ap trail-lits
-             (bsf .snd .snd ∙ ++-assoc (bsf .fst) (_ ∷ []) trr  ⁻¹)
-        ∙ trail-lits-++ {tr1 = bsf .fst ++ _ ∷ []}
-
   p∉ : p ∉ trail-lits trr
-  p∉ p∈ =
-    ++→uniq
-       (subst Uniq
-              (  ap (map < unlit , positive >) etr
-               ∙ map-++ < unlit , positive > (trail-lits (bsf .fst ++ _ ∷ [])) (trail-lits trr)
-               ∙ ap (_++ trail-pvars trr)
-                    (  ap (map < unlit , positive >) (map-++ fst (bsf .fst) ((p , guessed) ∷ []))
-                     ∙ map-++ < unlit , positive > (trail-lits (bsf .fst)) (p ∷ [])))
-              ti)
-       .snd .snd
-       (any-++-r (here refl))
-       (List.∈-map (< unlit , positive >) p∈)
-  np∉ : negate p ∉ trail-lits trr
-  np∉ =
-    subst (negate p ∉_)
-           (  ap (λ q → tail-of p q) etr0
-            ∙ tail-of-++-r (λ p∈' →
-                             ++→uniq
-                               (subst Uniq
-                                      (  ap (map < unlit , positive >) etr0
-                                       ∙ map-++ < unlit , positive > (trail-lits (bsf .fst)) (p ∷ trail-lits trr))
-                                      ti)
-                               .snd .snd
-                               (List.∈-map (< unlit , positive >) p∈')
-                               (here refl))
-            ∙ tail-of-∷ {z = p}) $
-    ti2 p $
-    subst ((p , guessed) ∈_)
-           (bsf .snd .snd ⁻¹) $
-    any-++-r (here refl)
+  p∉ = bsuffix→∉ ti bsf
 
-  ti'' : Trail-Inv trr
-  ti'' = bsuffix-trailinv bsf ti
-  ti2'' : Trail-Inv2 trr
-  ti2'' = bsuffix-trailinv2 bsf ti ti2
+  np∉ : negate p ∉ trail-lits trr
+  np∉ = bsuffix→negate∉ ti ti2 bsf
 
   -- computational stuff
   trti' = backjump cls p trr
-                 p∉ np∉
-                 ti'' ti2''
+            p∉ np∉
+            (bsuffix-trailinv bsf ti)
+            (bsuffix-trailinv2 bsf ti ti2)
   tr' = trti' .fst
   ti' = trti' .snd .fst
   ti2' = trti' .snd .snd .fst
   ts' = trti' .snd .snd .snd
 
-  bjsf : Backjump-suffix tr tr'
-  bjsf = bjsuffix-trans (bsuffix→bjsuffix bsf) ts'
-
   declits = filter (is-guessed? ∘ snd) tr'
   conflict = insert-s (negate p) (image (negate ∘ fst) declits)
   --
 
-  ti''' : Trail-Inv ((negate p , deduced) ∷ tr')
-  ti''' = contra (λ np∈ → map-⊆ fst
-                                (ope→subset $ suffix→ope $ bjsuffix→suffix ts') $
-                          map-∈ _ unlit-positive-inj np∈)
-                 np∉ ∷ᵘ ti'
-
-  ti2''' : Trail-Inv2 ((negate p , deduced) ∷ tr')
-  ti2''' z z∈ =
-    let z∈' = any-¬here (λ e → absurd (guessed≠deduced (ap snd e))) z∈
-      in
-    contra (subst (negate z ∈_)
-                  (tail-of-++-r {xs = negate p ∷ []}
-                                (¬any-∷ (λ z=np → uniq-uncons ti''' .fst $
-                                                  List.∈-map < unlit , positive > $
-                                                  List.∈-map fst $
-                                                  subst (λ q → (q , guessed) ∈ tr') z=np z∈')
-                                        false!))) $
-    ti2' z z∈'
-
-  bcg : count-guessed tr ＝ suc (count-guessed trr)
-  bcg = bsuffix→count-guessed bsf
+  np∉' : negate p ∉ trail-lits tr'
+  np∉' = contra (map-⊆ fst (ope→subset $ suffix→ope $ bjsuffix→suffix ts')) np∉
 
   cg< : count-guessed tr' < sizeₛ Γ
   cg< = <-≤-trans
           (≤-<-trans (ope-count (suffix→ope $ bjsuffix→suffix ts'))
-                     (<≃suc≤ $ =→≤ (bcg ⁻¹)))
+                     (<≃suc≤ $ =→≤ (bsuffix→count-guessed bsf ⁻¹)))
           (count-guessed-size ti ti2)
 
   bfin : Fin (sizeₛ Γ)
   bfin = ℕ→fin (count-guessed tr') cg<
 
   p∉r : p ∉ lookupᵥ rj bfin
-  p∉r p∈ =
-    ti2 p
-        (subst ((p , guessed) ∈_)
-               (bsf .snd .snd ⁻¹) $
-         any-++-r (here refl)) $
-    subst (λ q → negate p ∈ tail-of p q)
-          (etr0 ⁻¹) $
-    subst (negate p ∈_)
-          -- TODO copypaste
-          (tail-of-++-r (λ p∈' →
-                             ++→uniq
-                               (subst Uniq
-                                      (  ap (map < unlit , positive >) etr0
-                                       ∙ map-++ < unlit , positive > (trail-lits (bsf .fst)) (p ∷ trail-lits trr))
-                                      ti)
-                               .snd .snd
-                               (List.∈-map (< unlit , positive >) p∈')
-                               (here refl)) ⁻¹) $
-    subst (negate p ∈_)
-          (tail-of-∷ {z = p} ⁻¹) $
-    map-⊆ fst (ope→subset $ suffix→ope $ bjsuffix→suffix ts') $
-    subst (λ q → negate p ∈ trail-lits q)
-          (ts' ⁻¹) $
-    subst (λ q → negate p ∈ trail-lits q)
-          (bsuffix-drop-guessed {n = count-guessed trr ∸ count-guessed tr'} bsf) $
-    subst (λ q → negate p ∈ trail-lits (drop-guessed tr q))
-          (+∸-assoc 1 (count-guessed trr) (count-guessed tr')
-                      (bjsuffix-cg ts') ⁻¹) $
-    subst (λ q → negate p ∈ trail-lits (drop-guessed tr (q ∸ count-guessed tr')))
-          bcg $
-    subst (λ q → negate p ∈ trail-lits (drop-guessed tr (count-guessed tr ∸ q)))
-          (ℕ→fin→ℕ (count-guessed tr') cg<) $
-          ri p bfin p∈
+  p∉r = rejstkinv-∉ {rj = rj} bsf ts' cg< ti ti2 ri
 
   prf : (  map (λ q → 2 · sizeₛ Γ ∸ sizeₛ q)
-                (bump-at bfin p rj)
+               (bump-at bfin p rj)
          , 2 · sizeₛ Γ ∸ suc (length tr'))
           Box∷×.<∷× (x , y)
   prf =
@@ -1017,63 +1197,8 @@ dplb-loop-backjump {Γ} {x} {y} ih cls tr ti ti2 rj ri ex ey p trr eb =
               ∙ size-∷ ⁻¹)))
       (=→≤ (lookup-map {xs = rj} bfin ⁻¹))
 
-  ri'' : Rejstk-Inv (bump-at bfin p rj) ((negate p , deduced) ∷ tr')
-  ri'' x f x∈ =
-    Dec.elim
-      {C = λ q → x ∈ₛ (if ⌊ q ⌋
-                         then lookupᵥ rj f
-                         else if fin→ℕ f == fin→ℕ bfin
-                                then p ∷ lookupᵥ rj f
-                                else [])
-               → negate x ∈ trail-lits (drop-guessed ((negate p , deduced) ∷ tr')
-                                                     (count-guessed tr' ∸ fin→ℕ f))}
-      (λ lt x∈ →
-           let lt' = <-≤-trans lt (=→≤ (ℕ→fin→ℕ _ cg<)) in
-           subst (λ q → negate x ∈ trail-lits q)
-                  (drop-guessed-++-l {pr = (negate p , deduced) ∷ []} {tr = tr'} {n = count-guessed tr' ∸ fin→ℕ f}
-                     (id ∷ [])
-                     (∸>0≃> ⁻¹ $ lt') ⁻¹) $
-           subst (λ q → negate x ∈ trail-lits (drop-guessed q (count-guessed tr' ∸ fin→ℕ f)))
-                 (bjsf ⁻¹) $
-           subst (λ q → negate x ∈ trail-lits q)
-                 (drop-guessed-+ {n = count-guessed tr ∸ count-guessed tr'} {m = count-guessed tr' ∸ fin→ℕ f} ⁻¹) $
-           subst (λ q → negate x ∈ trail-lits (drop-guessed tr q))
-                 (  ap (_∸ fin→ℕ f)
-                            (∸+=id (count-guessed tr') (count-guessed tr)
-                              (bjsuffix-cg bjsf) ⁻¹)
-                  ∙ +∸-assoc (count-guessed tr ∸ count-guessed tr') (count-guessed tr') (fin→ℕ f)
-                             (<-weaken _ _ lt') ⁻¹) $
-           ri x f x∈)
-      (λ ge →
-           Dec.elim
-               {C = λ q → x ∈ₛ (if ⌊ q ⌋ then p ∷ lookupᵥ rj f else [])
-                        → negate x ∈ trail-lits (drop-guessed ((negate p , deduced) ∷ tr')
-                                                              (count-guessed tr' ∸ fin→ℕ f))}
-               (λ e x∈ →
-                   let e' = e ∙ ℕ→fin→ℕ _ cg< in
-                    subst (λ q → negate x ∈ trail-lits (drop-guessed ((negate p , deduced) ∷ tr') q))
-                          (  ap (count-guessed tr' ∸_) e' ⁻¹) $
-                    subst (λ q → negate x ∈ trail-lits (drop-guessed ((negate p , deduced) ∷ tr') q))
-                          (∸-cancel (count-guessed tr') ⁻¹) $
-                    [ (λ x=p → here (ap negate x=p))
-                    , (λ x∈' → there $
-                               subst (λ q → negate x ∈ trail-lits q)
-                                     (bjsf ⁻¹) $
-                               subst (λ q → negate x ∈ trail-lits (drop-guessed tr (count-guessed tr ∸ q)))
-                                     e' $
-                               ri x f x∈')
-                    ]ᵤ $
-                    ∈ₛ-∷→ x∈)
-               (λ ne → false! ⦃ Refl-x∉ₛ[] ⦄)
-               (ℕ-is-discrete {x = fin→ℕ f} {y = fin→ℕ bfin}))
-      (<-dec {x = fin→ℕ f} {x = fin→ℕ bfin})
-      (subst (x ∈_)
-             (lookup-tabulate {f = bump-at-fun p rj (fin→ℕ bfin)} f)
-             x∈)
-
-
 dplb-loop-guess : ∀ {x y}
-                → (□∷× TSI-ty) (x , y)
+                → (□∷× DPLB-ty) (x , y)
                 → (cls : CNF Γ)
                 → (tr : Trail Γ)
                 → (ti : Trail-Inv tr)
@@ -1100,85 +1225,24 @@ dplb-loop-guess {Γ} {x} {y} ih cls tr ti ti2 rj ri ex ey cls' tr' ti' ti2' us' 
     cls
     ((p , guessed) ∷ tr')
     --
-    ti'' ti2''
+    ti''
+    (push-guessed-trailinv2 np∉ ti2')
     rj
-    ri''
+    (push-rejstkinv-guessed {rj = rj} us' ri)
     refl refl
   where
+  -- computational
   pp∈ : Σ[ l ꞉ Lit Γ ] (l ∈ ps)
   pp∈ = posneg-rule cls' ps ne
   p = pp∈ .fst
+  --
   p∈ = pp∈ .snd
   pnp∉ : p ∉ trail-lits tr' × negate p ∉ trail-lits tr'
   pnp∉ = unassigned-∉ {c = cls} (subst (p ∈_) eps p∈)
   p∉ = pnp∉ .fst
   np∉ = pnp∉ .snd
   ti'' : Trail-Inv ((p , guessed) ∷ tr')
-  ti'' = contra (map-∈ _ unlit-positive-inj) p∉ ∷ᵘ ti'
-  ti2'' : Trail-Inv2 ((p , guessed) ∷ tr')
-  ti2'' z z∈ =
-    [ (λ z=p' → subst (λ q → negate z ∉ tail-of z (q ∷ trail-lits tr'))
-                      (ap fst z=p') $
-                subst (negate z ∉_)
-                      (tail-of-∷ {z = z} {xs = trail-lits tr'} ⁻¹) $
-                subst (λ q → negate q ∉ trail-lits tr')
-                      (ap fst z=p' ⁻¹) $
-                np∉)
-    , (λ z∈' → subst (negate z ∉_)
-                     (tail-of-++-r {xs = p ∷ []}
-                                   (¬any-∷ (contra (λ z=p → List.∈-map _ $
-                                                            List.∈-map _ $
-                                                            subst (λ q → (q , guessed) ∈ tr')
-                                                                  z=p
-                                                                  z∈')
-                                                   (uniq-uncons ti'' .fst))
-                                           false!) ⁻¹) $
-               ti2' z z∈')
-   ]ᵤ (any-uncons z∈)
-  ri'' : Rejstk-Inv rj ((p , guessed) ∷ tr')
-  ri'' x f x∈ =
-    let nx∈ = ri x f x∈ in
-    Dec.rec
-      (λ le →
-          subst (λ q → negate x ∈ trail-lits (drop-guessed ((p , guessed) ∷ tr') q))
-                (≤→∸=0 le ⁻¹) $
-          there $
-          subst (λ q → negate x ∈ trail-lits q)
-                 (us' .snd .snd ⁻¹) $
-          subst (negate x ∈_)
-                (trail-lits-++ {tr1 = us' .fst} ⁻¹) $
-          any-++-r {xs = trail-lits (us' .fst)} $
-          subst (λ q → negate x ∈ trail-lits (drop-guessed tr q))
-                (≤→∸=0 (=→≤ (uspsuffix→count-guessed us') ∙ ≤-ascend ∙ le)) $
-          nx∈)
-      (λ ge →
-          let le' = ≤≃<suc ⁻¹ $ ≱→< ge in
-          subst (λ q → negate x ∈ trail-lits (drop-guessed ((p , guessed) ∷ tr') q))
-                (+∸-assoc _ _ _ le') $
-          subst (λ q → negate x ∈ trail-lits (drop-guessed tr' (q ∸ fin→ℕ f)))
-                (uspsuffix→count-guessed us') $
-          subst (λ q → negate x ∈ trail-lits (drop-guessed q (count-guessed tr ∸ fin→ℕ f)))
-                (us' .snd .snd ⁻¹) $
-          [ (λ lt' →
-                subst (λ q → negate x ∈ trail-lits q)
-                      (drop-guessed-++-l
-                         {pr = us' .fst} {n = count-guessed tr ∸ fin→ℕ f}
-                         (us' .snd .fst)
-                         (∸>0≃> ⁻¹ $ <-≤-trans lt' (=→≤ (uspsuffix→count-guessed us' ⁻¹)))
-                         ⁻¹) $
-                nx∈)
-          , (λ e' →
-               let e'' = ≤→∸=0 (=→≤ (uspsuffix→count-guessed us' ∙ e' ⁻¹)) in
-               subst (λ q → negate x ∈ trail-lits (drop-guessed (us' .fst ++ tr) q))
-                     (e'' ⁻¹) $
-               subst (negate x ∈_)
-                     (trail-lits-++ {tr1 = us' .fst} ⁻¹) $
-               any-++-r {xs = trail-lits (us' .fst)} $
-               subst (λ q → negate x ∈ trail-lits (drop-guessed tr q))
-                     e'' $
-               nx∈)
-          ]ᵤ (≤→<⊎= le'))
-      (≤-dec {x = suc (count-guessed tr')} {x = fin→ℕ f})
+  ti'' = push-trailinv {tm = guessed} p∉ ti'
   prf : (  map (λ q → 2 · sizeₛ Γ ∸ sizeₛ q) rj
          , 2 · sizeₛ Γ ∸ suc (length tr'))
           Box∷×.<∷× (x , y)
@@ -1189,7 +1253,7 @@ dplb-loop-guess {Γ} {x} {y} ih cls tr ti ti2 rj ri ex ey cls' tr' ti' ti2' us' 
                    ≤≃<suc $ (uspsuffix→len us'))
                   (=→≤ (ey ⁻¹)))
 
-dplb-loop : ∀[ □∷× (TSI-ty {Γ}) ⇒ TSI-ty ]
+dplb-loop : ∀[ □∷× (DPLB-ty {Γ}) ⇒ DPLB-ty ]
 dplb-loop {Γ} {x = x , y} ih cls tr ti ti2 rj ri ex ey =
   let (cls' , tr' , ti' , ti2' , us') = unit-propagate-iter cls tr ti ti2 in
   Dec.rec
@@ -1207,7 +1271,7 @@ dplb-loop {Γ} {x = x , y} ih cls tr ti ti2 rj ri ex ey =
 
 dplb : CNF Γ → Bool
 dplb {Γ} c =
-  Box∷×.fix∷× TSI-ty
+  Box∷×.fix∷× DPLB-ty
     dplb-loop
     c
     []
@@ -1223,7 +1287,6 @@ dplbsat = dplb ∘ snd ∘ defcnfs
 dplbtaut : Formulaᵢ Γ → Bool
 dplbtaut = not ∘ dplbsat ∘ Not
 
-
 {-
 main : Main
 main =
@@ -1232,5 +1295,4 @@ main =
      -- put-str-ln $ "prime(DPLI) 13: " ++ₛ ppFBᵢ dplitaut (prime 13)
      -- put-str-ln $ "prime(DPLI) 16: " ++ₛ ppFBᵢ dplitaut (prime 16)
      put-str-ln $ "prime(DPLI) 21: " ++ₛ ppFBᵢ dplitaut (prime 21)
-
 -}
