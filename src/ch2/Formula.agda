@@ -221,13 +221,16 @@ elim-formula P pf pt pa pn pand por pimp piff (Iff x y) =
 on-atoms : (A → Formula B) → Formula A → Formula B
 on-atoms {B} f =
  elim-formula (λ _ → Formula B)
-   False True f
-   Not And Or Imp Iff
+   False True
+   f
+   Not
+   And Or Imp Iff
 
 over-atoms : (A → B → B) → Formula A → B → B
 over-atoms {B} f =
  elim-formula (λ _ → B → B)
-   id id f
+   id id
+   f
    id
    (λ px py → px ∘ py)
    (λ px py → px ∘ py)
@@ -253,9 +256,12 @@ atoms = atom-union (_∷ [])
 atomsₛ : Formula A → LFSet A
 atomsₛ {A} =
   elim-formula (λ _ → LFSet A)
-    [] [] sng
-    id _∪∷_ _∪∷_ _∪∷_ _∪∷_
+    [] []
+    sng
+    id
+    _∪∷_ _∪∷_ _∪∷_ _∪∷_
 
+-- TODO copypaste
 atoms-⊆ : ⦃ d : is-discrete A ⦄
         → {f : Formula A}
         → atoms-list f ⊆ atomsₛ f
@@ -296,6 +302,23 @@ atoms-⊆ {A} {f} =
         hx (over-atoms _∷_ y zs) {x = q})
      f
      []
+{-     
+  where
+  prf2 : {x y : Formula A} {f : Formula A → Formula A → Formula A}
+       → ?
+       → ?
+       → ((zs : List A) → over-atoms _∷_ x zs ⊆ (LFSet.from-list zs ∪∷ atomsₛ x))
+       → ((zs : List A) → over-atoms _∷_ y zs ⊆ (LFSet.from-list zs ∪∷ atomsₛ y))
+       → (zs : List A) → over-atoms _∷_ (f x y) zs ⊆ (LFSet.from-list zs ∪∷ atomsₛ (f x y))
+  prf2 {x} {y} fo fe hx hy zs {x = q} q∈ =
+    let zz = subst (q ∈_)
+                   (  ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs) ⁻¹
+                    ∙ ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ y})) $
+             ⊆-∪∷-r (hy zs ∘ list-∈) $
+             hx (over-atoms _∷_ y zs) {x = q} {!!}
+     in
+    {!!}
+  -}
 
 atoms-⊇ : ⦃ d : is-discrete A ⦄
         → {f : Formula A}

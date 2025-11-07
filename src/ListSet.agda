@@ -20,6 +20,10 @@ open import Data.List.Correspondences.Binary.OPE
 private variable
   A B : 𝒰
 
+setify : ⦃ d : is-discrete A ⦄
+       → List A → List A
+setify = nub _=?_
+
 union : ⦃ d : is-discrete A ⦄
        → List A → List A → List A
 union xs ys = nub _=?_ $ xs ++ ys

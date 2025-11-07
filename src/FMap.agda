@@ -26,6 +26,7 @@ upd k v (mf , md) = (λ x → if x =? k then just v else mf x) , k ∷ md
 lup : FMap A B → A → Maybe B
 lup (mf , _) = mf
 
+-- TODO nub ?
 dom : FMap A B → List A
 dom (_ , md) = md
 
