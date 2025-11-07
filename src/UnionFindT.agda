@@ -114,28 +114,28 @@ is-acyclic = is-noeth ∘ ntedge
 record Partition (A : 𝒰) ⦃ d : is-discrete A ⦄ : 𝒰 where
   constructor mkpartition
   field
-    mp  : PGraph A
-    acy : is-acyclic mp
+    pg  : PGraph A
+    acy : is-acyclic pg
 
 open Partition public
 
 terminus-loop : ⦃ d : is-discrete A ⦄
-                (mp : KVMap A (Pnode A))
+                (pg : KVMap A (Pnode A))
               → (x : A)
-              → ((y : A) → ntedge mp x y → Maybe (A × ℕ))
+              → ((y : A) → ntedge pg x y → Maybe (A × ℕ))
               → Maybe (A × ℕ)
-terminus-loop {A} mp x ih =
+terminus-loop {A} pg x ih =
   Maybe.elim
-    (λ m → lookupm mp x ＝ m → Maybe (A × ℕ))
+    (λ m → lookupm pg x ＝ m → Maybe (A × ℕ))
     (λ _ → nothing)
     (λ where
          (nonterminal z) e → ih z (=just→∈ e)
          (terminal z n) _ → just (z , n))
-    (lookupm mp x) refl
+    (lookupm pg x) refl
 
 terminus : ⦃ d : is-discrete A ⦄
          → Partition A → A → Maybe (A × ℕ)
-terminus {A} (mkpartition mp acy) = to-ninduction acy _ (terminus-loop mp)
+terminus {A} (mkpartition pg acy) = to-ninduction acy _ (terminus-loop pg)
 
 try-terminus : ⦃ d : is-discrete A ⦄
              → Partition A → A → A × ℕ
@@ -147,7 +147,7 @@ try-terminus p a =
 
 canonize : ⦃ d : is-discrete A ⦄
          → Partition A → A → A
-canonize env = fst ∘ try-terminus env
+canonize eqv = fst ∘ try-terminus eqv
 
 equivalent : ⦃ d : is-discrete A ⦄
            → Partition A → A → A → Bool
@@ -159,10 +159,10 @@ join : ⦃ d : is-discrete A ⦄
      → ℕ
      → (p : Partition A)
      → Partition A
-join a b ne k (mkpartition mp ac) =
+join a b ne k (mkpartition pg acy) =
   mkpartition
-    (link a b k mp)
-    (to-ninduction ac _
+    (link a b k pg)
+    (to-ninduction acy _
         λ x ih → acc λ y →
            [ (λ where
                   (_ , y=b) → acc λ z →
@@ -170,10 +170,10 @@ join a b ne k (mkpartition mp ac) =
                            (y=a , _) → absurd (ne (y=a ⁻¹ ∙ y=b)))
                      , (λ where
                            (y≠b , _) → absurd (y≠b y=b))
-                     ]ᵤ ∘ ntelink {g = mp})
+                     ]ᵤ ∘ ntelink {g = pg})
            , (λ where
                   (_ , e′) → ih y e′)
-           ]ᵤ ∘ ntelink {g = mp})
+           ]ᵤ ∘ ntelink {g = pg})
 
 equate : ⦃ d : is-discrete A ⦄
        → A → A → Partition A → Partition A
@@ -195,4 +195,4 @@ unequal = mkpartition emptym (λ x → acc λ y → false!)
 
 equated : ⦃ d : is-discrete A ⦄
         → Partition A → List A
-equated (mkpartition mp _) = keysm mp
+equated (mkpartition pg _) = keysm pg
