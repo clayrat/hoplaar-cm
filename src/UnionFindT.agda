@@ -1,13 +1,14 @@
 module UnionFindT where
 
-open import Foundations.Prelude
+open import Prelude
+open import Foundations.Sigma
 open import Logic.Discreteness
 open Variadics _
 
 open import Data.Unit
-open import Data.Empty
+open import Data.Empty hiding (_≠_)
 open import Data.Bool
-open import Data.Reflects
+open import Data.Reflects as Reflects
 open import Data.Dec as Dec
 open import Data.Nat
 open import Data.Nat.Order.Base
@@ -34,9 +35,14 @@ data Pnode (A : 𝒰) : 𝒰 where
   nonterminal : A → Pnode A
   terminal    : A → ℕ → Pnode A
 
+
 nodeval : Pnode A → A
 nodeval (nonterminal a) = a
 nodeval (terminal a _)  = a
+
+noderank : Pnode A → Maybe ℕ
+noderank (nonterminal _) = nothing
+noderank (terminal _ n)  = just n
 
 is-nonterminal : Pnode A → 𝒰
 is-nonterminal (nonterminal _) = ⊤
@@ -50,6 +56,40 @@ nonterminal-inj : {a b : A}
                 → nonterminal a ＝ nonterminal b
                 → a ＝ b
 nonterminal-inj = ap nodeval
+
+terminal-inj : {a b : A} {n m : ℕ}
+             → terminal a n ＝ terminal b m
+             → (a ＝ b) × (n ＝ m)
+terminal-inj e = ap nodeval e , ap (Maybe.rec 0 id ∘ noderank) e
+
+Pnode-= : (A → A → Bool) → Pnode A → Pnode A → Bool
+Pnode-= eq (nonterminal x) (nonterminal y) = eq x y
+Pnode-= eq (terminal x n)  (terminal y m)  = eq x y and (n == m)
+Pnode-= _ _ _ = false
+
+Reflects-Pnode-= : {eq : A → A → Bool}
+                   ⦃ r : ∀ {x y} → Reflects (x ＝ y) (eq x y) ⦄
+                 → ∀ {x y} → Reflects (x ＝ y) (Pnode-= eq x y)
+Reflects-Pnode-= ⦃ r ⦄ {x = nonterminal x} {y = nonterminal y} =
+  Reflects.dmap
+    (ap nonterminal)
+    (contra nonterminal-inj)
+    (r {x = x})
+Reflects-Pnode-=       {x = nonterminal x} {y = terminal y m}  =
+  ofⁿ nonterminal≠terminal
+Reflects-Pnode-=       {x = terminal x n}  {y = nonterminal y} =
+  ofⁿ (nonterminal≠terminal ∘ _⁻¹)
+Reflects-Pnode-= ⦃ r ⦄ {x = terminal x n}  {y = terminal y m}  =
+  Reflects.dmap
+    ((λ e1 → ap² terminal e1) $²_)
+    (contra terminal-inj)
+    (Reflects-× ⦃ rp = r {x = x} ⦄ ⦃ rq = Reflects-ℕ-Path {m = n} ⦄ )
+
+instance
+  Pnode-discrete : ⦃ d : is-discrete A ⦄
+                 → is-discrete (Pnode A)
+  Pnode-discrete ⦃ d ⦄ {x} {y} .does = Pnode-= (λ x y → d {x = x} {y = y} .does) x y
+  Pnode-discrete .proof = Reflects-Pnode-=
 
 PGraph : 𝒰 → 𝒰
 PGraph A = KVMap A (Pnode A)
@@ -73,13 +113,13 @@ ntelink : ⦃ d : is-discrete A ⦄
         → ((x ＝ a) × (y ＝ b)) ⊎ ((x ≠ b) × ntedge g x y)
 ntelink {a} {b} {k} {g} {x} {y} =
   let g' = upsert-kv (λ _ → id) b (terminal b k) (g .kv)
+      const' : {S T : 𝒰} → T → Maybe S → T
+      const' x = Maybe.rec x (λ _ → x)
     in
     Dec.elim
      {C = λ q → nonterminal y ∈ₘ (if ⌊ q ⌋
-                                    then Maybe.rec
-                                           (just (nonterminal b))
-                                           (λ _ → just (nonterminal b))
-                                           (lookup-kv g' x)
+                                    then const' (just $ nonterminal b)
+                                                (lookup-kv g' x)
                                     else lookup-kv g' x)
               → ((x ＝ a) × (y ＝ b)) ⊎ ((x ≠ b) × ntedge g x y)}
      (λ x=a → inl ∘ (x=a ,_)
@@ -92,10 +132,8 @@ ntelink {a} {b} {k} {g} {x} {y} =
                     (kvlist-upsert-lookup {xs = g .kv} x ⁻¹)
                     (Dec.elim
                        {C = λ q → nonterminal y ∈ₘ (if ⌊ q ⌋
-                                                      then Maybe.rec
-                                                             (just (terminal b k))
-                                                             (λ _ → just (terminal b k))
-                                                             (lookup-kv (g .kv) x)
+                                                      then const' (just $ terminal b k)
+                                                                  (lookup-kv (g .kv) x)
                                                       else lookup-kv (g .kv) x)
                                 → (x ≠ b) × ntedge g x y}
                        (λ x=b → subst (λ q → nonterminal y ∈ₘ q → (x ≠ b) × ntedge g x y)
@@ -118,6 +156,19 @@ record Partition (A : 𝒰) ⦃ d : is-discrete A ⦄ : 𝒰 where
     acy : is-acyclic pg
 
 open Partition public
+
+pg-injective : ⦃ d : is-discrete A ⦄ → Injective (pg {A = A})
+pg-injective {x = mkpartition pgx acyx} {y = mkpartition pgy acyy} e =
+  ap² mkpartition e $
+  to-pathᴾ ((Π-is-of-hlevel 1 λ x → hlevel 1) _ acyy)
+
+↣-part : ⦃ d : is-discrete A ⦄ → Partition A ↣ PGraph A
+↣-part = pg , pg-injective
+
+instance
+  Partition-discrete : ⦃ d : is-discrete A ⦄
+                     → is-discrete (Partition A)
+  Partition-discrete ⦃ d ⦄ = ↣→is-discrete ↣-part auto
 
 terminus-loop : ⦃ d : is-discrete A ⦄
                 (pg : KVMap A (Pnode A))
@@ -144,6 +195,8 @@ try-terminus p a =
     (a , 1)
     id
     (terminus p a)
+
+-- API
 
 canonize : ⦃ d : is-discrete A ⦄
          → Partition A → A → A
