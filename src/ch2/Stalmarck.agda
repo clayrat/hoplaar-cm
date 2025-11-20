@@ -3,6 +3,7 @@ module ch2.Stalmarck where
 open import Foundations.Prelude
 open import Meta.Effect hiding (_>>_) renaming (_>>=_ to _>>=ᵐ_)
 open import Meta.Show
+open import Meta.Effect.Bind.State
 open import Logic.Discreteness
 open import System.Everything hiding (_<$>_)
 
@@ -36,116 +37,6 @@ open KVOps
 open KVOps2
 open KVProp
 
--- triplets
-
-triplicate : Form → Form × List Form
-triplicate fm =
-  let fm' = nenf→form $ nenf0 fm
-      n = suc (over-atoms (max-var-ix "p_") fm' 0)
-      (fm'' , defs , _) = maincnf fm' emp n
-    in
-  fm'' , map snd (codom defs)
-
--- simple rules
-
-lit-< : Lit Var → Lit Var → Bool
-lit-< (Pos v1) (Pos v2) = v1 <str? v2
-lit-< (Pos v1) (Neg v2) = true
-lit-< (Neg v1) (Pos v2) = false
-lit-< (Neg v1) (Neg v2) = v1 <str? v2
-
-data ELit (A : 𝒰) : 𝒰 where
-  elit : Lit A → ELit A
-  etrue : ELit A
-  efalse : ELit A
-
-unelit : ELit A → Maybe (Lit A)
-unelit (elit l) = just l
-unelit _ = nothing
-
-is-elit : ELit A → Type
-is-elit (elit _) = ⊤
-is-elit  _       = ⊥
-
-is-etrue : ELit A → Type
-is-etrue etrue = ⊤
-is-etrue _     = ⊥
-
-elit≠etrue : {l : Lit A} → elit l ≠ etrue
-elit≠etrue p = subst is-elit p tt
-
-elit≠efalse : {l : Lit A} → elit l ≠ efalse
-elit≠efalse p = subst is-elit p tt
-
-etrue≠efalse : etrue {A = A} ≠ efalse
-etrue≠efalse p = subst is-etrue p tt
-
-elit-= : (A → A → Bool)
-       → ELit A → ELit A → Bool
-elit-= e (elit l1) (elit l2) = Lit-= e l1 l2
-elit-= e (elit _)  etrue     = false
-elit-= e (elit _)  efalse    = false
-elit-= e  etrue   (elit _)   = false
-elit-= e  etrue    etrue     = true
-elit-= e  etrue    efalse    = false
-elit-= e  efalse  (elit _)   = false
-elit-= e  efalse   etrue     = false
-elit-= e  efalse   efalse    = true
-
-Reflects-elit : {e : A → A → Bool}
-              → (∀ {x y} → Reflects (x ＝ y) (e x y))
-              → ∀ {lx ly} → Reflects (lx ＝ ly) (elit-= e lx ly)
-Reflects-elit r {lx = elit l1} {ly = elit l2} =
-  Reflects.dmap (ap elit) (contra (just-inj ∘ ap unelit))
-    (Reflects-lit r {lx = l1} {ly = l2})
-Reflects-elit r {lx = elit l1} {ly = etrue}   = ofⁿ elit≠etrue
-Reflects-elit r {lx = elit l1} {ly = efalse}  = ofⁿ elit≠efalse
-Reflects-elit r {lx = etrue}   {ly = elit l2} = ofⁿ (elit≠etrue ∘ _⁻¹)
-Reflects-elit r {lx = etrue}   {ly = etrue}   = ofʸ refl
-Reflects-elit r {lx = etrue}   {ly = efalse}  = ofⁿ etrue≠efalse
-Reflects-elit r {lx = efalse}  {ly = elit l2} = ofⁿ (elit≠efalse ∘ _⁻¹)
-Reflects-elit r {lx = efalse}  {ly = etrue}   = ofⁿ (etrue≠efalse ∘ _⁻¹)
-Reflects-elit r {lx = efalse}  {ly = efalse}  = ofʸ refl
-
-instance
-  ELit-is-discrete : ⦃ d : is-discrete A ⦄ → is-discrete (ELit A)
-  ELit-is-discrete ⦃ d ⦄ {x} {y} .does  = elit-= (λ x y → d {x = x} {y = y} .does) x y
-  ELit-is-discrete ⦃ d ⦄         .proof = Reflects-elit (d .proof)
-
-  Show-elit : ⦃ s : Show A ⦄ → Show (ELit A)
-  Show-elit = default-show λ where
-                              (elit l) → show l
-                              etrue → "T"
-                              efalse → "F"
-
-elit-< : ELit Var → ELit Var → Bool
-elit-< (elit l1) (elit l2) = lit-< l1 l2
-elit-< (elit _)   etrue    = false
-elit-< (elit _)   efalse   = false
-elit-<  etrue    (elit _)  = true
-elit-<  etrue     etrue    = false
-elit-<  etrue     efalse   = true
-elit-<  efalse   (elit _)  = true
-elit-<  efalse    etrue    = false
-elit-<  efalse    efalse   = false
-
-elit→form : ELit A → Formula A
-elit→form (elit l) = lit→form l
-elit→form  etrue   = True
-elit→form  efalse  = False
-
-negelit : ELit A → ELit A
-negelit (elit x) = elit (negate x)
-negelit etrue = efalse
-negelit efalse = etrue
-
-form→elit : Formula A → Maybe (ELit A)
-form→elit  False   = just efalse
-form→elit  True    = just etrue
-form→elit (Atom x) = just $ elit $ Pos x
-form→elit (Not f)  = map negelit $ form→elit f
-form→elit  _       = nothing
-
 Eqv : 𝒰 → 𝒰
 Eqv A = ELit A × ELit A
 
@@ -157,21 +48,129 @@ instance
 EClass : 𝒰 → 𝒰
 EClass A = Partition (ELit A)
 
-enegative : ELit A → Bool
-enegative (elit (Neg _)) = true
-enegative  efalse        = true
-enegative  _             = false
+-- triplets
 
-epositive : ELit A → Bool
-epositive = not ∘ enegative
+data Duplet (A : 𝒰) : 𝒰 where
+  duand : ELit A → ELit A → Duplet A
+  duor  : ELit A → ELit A → Duplet A
+  -- we never get this
+--  duimp : ELit A → ELit A → Duplet A
+  duiff : ELit A → ELit A → Duplet A
 
-enegate : ELit A → ELit A
-enegate (elit l) = elit (negate l)
-enegate  etrue   = efalse
-enegate  efalse  = etrue
+is-duand : Duplet A → Type
+is-duand (duand _ _) = ⊤
+is-duand  _         = ⊥
 
-eatom : ELit A → ELit A
-eatom lit = if enegative lit then enegate lit else lit
+is-duor : Duplet A → Type
+is-duor (duor _ _) = ⊤
+is-duor  _        = ⊥
+
+duand≠duor : {p q r s : ELit A} → duand p q ≠ duor r s
+duand≠duor e = subst is-duand e tt
+
+duand≠duiff : {p q r s : ELit A} → duand p q ≠ duiff r s
+duand≠duiff e = subst is-duand e tt
+
+duor≠duiff : {p q r s : ELit A} → duor p q ≠ duiff r s
+duor≠duiff e = subst is-duor e tt
+
+unduplet : Duplet A → ELit A × ELit A
+unduplet (duand p q) = p , q
+unduplet (duor  p q) = p , q
+unduplet (duiff p q) = p , q
+
+Duplet-= : (A → A → Bool)
+         → Duplet A → Duplet A → Bool
+Duplet-= e (duand p1 q1) (duand p2 q2) = elit-= e p1 p2 and elit-= e q1 q2
+Duplet-= e (duor  p1 q1) (duor  p2 q2) = elit-= e p1 p2 and elit-= e q1 q2
+Duplet-= e (duiff p1 q1) (duiff p2 q2) = elit-= e p1 p2 and elit-= e q1 q2
+Duplet-= e _              _              = false
+
+Reflects-duplet : {e : A → A → Bool}
+                → ⦃ r : ∀ {x y} → Reflects (x ＝ y) (e x y) ⦄
+                → ∀ {d1 d2} → Reflects (d1 ＝ d2) (Duplet-= e d1 d2)
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duand p1 q1} {d2 = duand p2 q2} =
+  Reflects.dmap ((λ e → ap² duand e) $²_) (contra (×-path-inv ∘ ap unduplet))
+    (Reflects-× ⦃ rp = Reflects-elit r ⦄ ⦃ rq = Reflects-elit r ⦄)
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duand p1 q1} {d2 = duor p2 q2} =
+  ofⁿ duand≠duor
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duand p1 q1} {d2 = duiff p2 q2} =
+  ofⁿ duand≠duiff
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duor p1 q1} {d2 = duand p2 q2} =
+  ofⁿ (duand≠duor ∘ _⁻¹)
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duor p1 q1} {d2 = duor p2 q2} =
+  Reflects.dmap ((λ e → ap² duor e) $²_) (contra (×-path-inv ∘ ap unduplet))
+    (Reflects-× ⦃ rp = Reflects-elit r ⦄ ⦃ rq = Reflects-elit r ⦄)
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duor p1 q1} {d2 = duiff p2 q2} =
+  ofⁿ duor≠duiff
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duiff p1 q1} {d2 = duand p2 q2} =
+  ofⁿ (duand≠duiff ∘ _⁻¹)
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duiff p1 q1} {d2 = duor p2 q2} =
+  ofⁿ (duor≠duiff ∘ _⁻¹)
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duiff p1 q1} {d2 = duiff p2 q2} =
+  Reflects.dmap ((λ e → ap² duiff e) $²_) (contra (×-path-inv ∘ ap unduplet))
+    (Reflects-× ⦃ rp = Reflects-elit r ⦄ ⦃ rq = Reflects-elit r ⦄)
+
+instance
+  Duplet-discrete : ⦃ d : is-discrete A ⦄
+                  → is-discrete (Duplet A)
+  Duplet-discrete ⦃ d ⦄ {x} {y} .does  = Duplet-= (λ x y → d .does) x y
+  Duplet-discrete ⦃ d ⦄ {x} {y} .proof = Reflects-duplet
+
+Triplet : 𝒰 → 𝒰
+Triplet A = A × Duplet A
+
+tripatoms : Triplet A → List A
+tripatoms (v , d) =
+  let (l , r) = unduplet d in
+  v ∷ Maybe.rec [] ((_∷ []) ∘ unlit) (unelit l) ++ Maybe.rec [] ((_∷ []) ∘ unlit) (unelit r)
+
+-- TODO backport to def CNF?
+
+TFM : 𝒰
+TFM = FMap (Duplet Var) (Triplet Var)
+
+Trp : 𝒰
+Trp = ELit Var × TFM × ℕ
+
+mk-prp : State ℕ Var
+mk-prp .run-stateT n = suc n , "p_" ++ₛ show-ℕ n
+
+mutual
+  maintrip : NENF Var → TFM → ℕ
+           → Trp
+  maintrip (AndEF p q) defs n = defstp duand p q defs n
+  maintrip (OrEF p q)  defs n = defstp duor p q defs n
+  maintrip (IffEF p q) defs n = defstp duiff p q defs n
+  maintrip (LitEF l)   defs n = elit l , defs , n
+  maintrip  TrueEF     defs n = etrue , defs , n
+  maintrip  FalseEF    defs n = efalse , defs , n
+
+  defstp : (ELit Var → ELit Var → Duplet Var)
+          → NENF Var → NENF Var → TFM → ℕ
+          → Trp
+  defstp op p q defs n =
+    let (l1 , defs1 , n1) = maintrip p defs n
+        (l2 , defs2 , n2) = maintrip q defs1 n1
+        d' = op l1 l2
+      in
+    Maybe.rec
+       (let (n3 , v) = mk-prp .run-stateT n2 in
+          elit (Pos v)
+        , upd d' (v , d') defs2
+        , n3)
+       (λ (v , _) → elit (Pos v) , defs2 , n2)
+       (lup defs2 d')
+
+triplicate : Form → ELit Var × List (Triplet Var)
+triplicate fm =
+  let fm' = nenf0 fm
+      n = suc (over-atoms (max-var-ix "p_") (nenf→form fm') 0)
+      (l , defs , _) = maintrip fm' emp n
+    in
+  l , codom defs
+
+-- simple rules
 
 align-pol : Eqv A → Eqv A
 align-pol (p , q) =
@@ -181,7 +180,7 @@ align-pol (p , q) =
 
 align : Eqv Var → Eqv Var
 align (p , q) =
-  if elit-< (eatom p) (eatom q)
+  if elit-< _<str?_ (eabs p) (eabs q)
     then align-pol (q , p)
     else align-pol (p , q)
 
@@ -225,7 +224,7 @@ alignedeqs fm =
   let poslits = insert-s etrue (map (elit ∘ Pos) (atoms fm))
       lits = union poslits (map enegate poslits)
       pairs = map² _,_ lits lits
-      npairs = filter (λ (p , q) → not (eatom p =? eatom q)) pairs
+      npairs = filter (λ (p , q) → not (eabs p =? eabs q)) pairs
    in
   setify (map align npairs)
 
@@ -244,44 +243,41 @@ mfs : Maybe Form
 mfs = parseForm fms
 -}
 
-inst-trigger : Form × Form × Form → List Trigger → List Trigger
+inst-trigger : Var × ELit Var × ELit Var → List Trigger → List Trigger
 inst-trigger = map ∘ instnfn
   where
-  ddnegate : Form → Form
-  ddnegate (Not (Not f)) = f
-  ddnegate  f            = f
-  instfn : Form × Form × Form → ELit Var → ELit Var
+  instfn : Var × ELit Var × ELit Var → ELit Var → ELit Var
   instfn (x , y , z) e =
-    let sub : KVMap (ELit Var) Form
-        sub = insertm (elit $ Pos "p") x $
+    let sub : KVMap (ELit Var) (ELit Var)
+        sub = insertm (elit $ Pos "p") (elit $ Pos x) $
               insertm (elit $ Pos "q") y $
               insertm (elit $ Pos "r") z $
               emptym
       in
-    Maybe.rec
-      e
-      -- TODO triplicate should just produce ELits
-      (Maybe.rec e id ∘ form→elit ∘ ddnegate)
-      (lookupm sub e)
-  inst2fn : Form × Form × Form → Eqv Var → Eqv Var
+    Maybe.rec e id (lookupm sub e)
+  inst2fn : Var × ELit Var × ELit Var → Eqv Var → Eqv Var
   inst2fn i (p , q) = align (instfn i p , instfn i q)
-  instnfn : Form × Form × Form → Trigger → Trigger
+  instnfn : Var × ELit Var × ELit Var → Trigger → Trigger
   instnfn i (a , c) = inst2fn i a , map (inst2fn i) c
 
 trigger' : (Form → Form → Form) → List Trigger
 trigger' op = triggers $ Iff (Atom "p") (op (Atom "q") (Atom "r"))
 
-trigger : Form → List Trigger
-trigger (Iff x (And y z)) = inst-trigger (x , y , z) $ trigger' And
-trigger (Iff x (Or y z))  = inst-trigger (x , y , z) $ trigger' Or
-trigger (Iff x (Imp y z)) = inst-trigger (x , y , z) $ trigger' Imp
-trigger (Iff x (Iff y z)) = inst-trigger (x , y , z) $ trigger' Iff
-trigger _                 = []
+trigger : Triplet Var → List Trigger
+trigger (x , duand y z) = inst-trigger (x , y , z) $ trigger' And
+trigger (x , duor  y z) = inst-trigger (x , y , z) $ trigger' Or
+trigger (x , duiff y z) = inst-trigger (x , y , z) $ trigger' Iff
 
 -- 0-saturation
 
+ListMap : 𝒰 → 𝒰 → 𝒰
+ListMap K V = KVMap K (List V)
+
+look : {K V : 𝒰} ⦃ d : is-discrete K ⦄ → ListMap K V → K → List V
+look m l = Maybe.rec [] id (lookupm m l)
+
 TrigMap : 𝒰
-TrigMap = KVMap (ELit Var) (List Trigger)
+TrigMap = ListMap (ELit Var) Trigger
 
 relevance : List Trigger → TrigMap
 relevance trigs =
@@ -289,7 +285,7 @@ relevance trigs =
   where
   insert-relevant : ELit Var → Trigger → TrigMap → TrigMap
   insert-relevant p trg f =
-    insertm p (insert-s trg (Maybe.rec [] id (lookupm f p))) f
+    insertm p (insert-s trg (look f p)) f
   insert-relevant2 : Trigger → TrigMap → TrigMap
   insert-relevant2 trg@((p , q) , _) =
     insert-relevant p trg ∘ insert-relevant q trg
@@ -308,18 +304,15 @@ equatecons (p0 , q0) erf@(eqv , rfn) =
       let p' = canonize eqv (negelit p0)
           q' = canonize eqv (negelit q0)
           eqv' = equate2 (p , q) eqv
-          sp-pos = look p
-          sp-neg = look p'
-          sq-pos = look q
-          sq-neg = look q'
+          sp-pos = look rfn p
+          sp-neg = look rfn p'
+          sq-pos = look rfn q
+          sq-neg = look rfn q'
           rfn' = insertm (canonize eqv' p)  (union sp-pos sq-pos) $
                  insertm (canonize eqv' p') (union sp-neg sq-neg) rfn
           nw = union (intersect sp-pos sq-pos) (intersect sp-neg sq-neg)
         in
       (List.rec [] (union ∘ snd) nw) , (eqv' , rfn')
-  where
-  look : ELit Var → List Trigger
-  look f = Maybe.rec [] id (lookupm rfn f)
 
 {-# TERMINATING #-}
 zero-saturate : Erf → List (Eqv Var) → Erf
@@ -347,25 +340,28 @@ equateset : List (ELit Var) → Erf → Erf
 equateset (a ∷ b ∷ ss) eqfn = equateset (b ∷ ss) (snd (equatecons (a , b) eqfn))
 equateset _            eqfn = eqfn
 
+RevMap : 𝒰
+RevMap = ListMap (ELit Var) (ELit Var)
+
 {-# TERMINATING #-}
-inter : List (ELit Var) → Erf → Erf
-      → KVMap (ELit Var) (List (ELit Var))
-      → KVMap (ELit Var) (List (ELit Var))
+inter : List (ELit Var)
+      → Erf → Erf
+      → RevMap → RevMap
       → Erf → Erf
 inter []       _              _              _    _    erf = erf
 inter (x ∷ xs) erf1@(eq1 , _) erf2@(eq2 , _) rev1 rev2 erf =
   let b1 = canonize eq1 x
       b2 = canonize eq2 x
-      s1 = Maybe.rec [] id (lookupm rev1 b1)
-      s2 = Maybe.rec [] id (lookupm rev2 b2)
+      s1 = look rev1 b1
+      s2 = look rev2 b2
       s = intersect s1 s2
     in
   inter (diff xs s) erf1 erf2 rev1 rev2 (equateset s erf)
 
-reverseq : List (ELit Var) → EClass Var → KVMap (ELit Var) (List (ELit Var))
+reverseq : List (ELit Var) → EClass Var → RevMap
 reverseq domain eqv =
   let a1 = map (λ x → x , canonize eqv x) domain in
-  fold-r (λ (y , x) f → insertm x (insert-s y (Maybe.rec [] id (lookupm f x))) f) emptym a1
+  fold-r (λ (y , x) f → insertm x (insert-s y (look f x)) f) emptym a1
 
 stal-intersect : Erf → Erf → Erf → Erf
 stal-intersect erf1@(eq1 , _) erf2@(eq2 , _) erf =
@@ -417,33 +413,31 @@ saturate-upto vars n m trigs assigs =
            then just true
            else saturate-upto vars (suc n) m trigs assigs
 
+EqvMap : 𝒰
+EqvMap = ListMap (Eqv Var) (Eqv Var)
+
 stalmarck : Form → Maybe Bool
 stalmarck fm =
   let fm' = psimplify (Not fm) in
   if fm' =? False
     then just true
-    else if fm' =? True
-           then just false
-           else let pt = triplicate fm'
-                    p = pt .fst
-                    trips = pt .snd
-                    trigfn = List.rec emptym (λ f m → List.rec m include-trig (trigger f)) trips
-                    vars = map (elit ∘ Pos) (unions $ map atoms trips)
-                  in
-                -- TODO triplicate should just produce ELits
-                Maybe.rec
-                  nothing
-                  (λ l → saturate-upto vars 0 2 (trigfn .kv) ((l , etrue) ∷ []))
-                  (form→elit p)
+    else
+      if fm' =? True
+        then just false
+        else
+          let pt = triplicate fm'
+              p = pt .fst
+              trips = pt .snd
+              trigfn = List.rec emptym (λ f m → List.rec m include-trig (trigger f)) trips
+              vars = map (elit ∘ Pos) (unions $ map tripatoms trips)
+            in
+          saturate-upto vars 0 2 (trigfn .kv) ((p , etrue) ∷ [])
   where
-  include-trig : Trigger
-               → KVMap (Eqv Var) (List (Eqv Var))
-               → KVMap (Eqv Var) (List (Eqv Var))
-  include-trig (e , cqs) f = insertm e (union cqs (Maybe.rec [] id (lookupm f e))) f
+  include-trig : Trigger → EqvMap → EqvMap
+  include-trig (e , cqs) f = insertm e (union cqs (look f e)) f
 
 main : Main
 main = run $ do put-str-ln $ show $ stalmarck $ mk-adder-test 1 1
                 put-str-ln $ show $ stalmarck $ mk-adder-test 1 2
                 put-str-ln $ show $ stalmarck $ mk-adder-test 2 1
                 put-str-ln $ show $ stalmarck $ mk-adder-test 2 2
-

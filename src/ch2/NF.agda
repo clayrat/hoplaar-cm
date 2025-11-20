@@ -131,7 +131,128 @@ trivial? c =
   let (p , n) = partition positive c in
   is-cons? $ intersect p $ image negate n
 
+lit-< : (A → A → Bool)
+      → Lit A → Lit A → Bool
+lit-< ord (Pos v1) (Pos v2) = ord v1 v2
+lit-< _   (Pos v1) (Neg v2) = true
+lit-< _   (Neg v1) (Pos v2) = false
+lit-< ord (Neg v1) (Neg v2) = ord v1 v2
+
+-- extended literals
+
+data ELit (A : 𝒰) : 𝒰 where
+  elit   : Lit A → ELit A
+  etrue  : ELit A
+  efalse : ELit A
+
+unelit : ELit A → Maybe (Lit A)
+unelit (elit l) = just l
+unelit  _       = nothing
+
+is-elit : ELit A → 𝒰
+is-elit (elit _) = ⊤
+is-elit  _       = ⊥
+
+is-etrue : ELit A → 𝒰
+is-etrue etrue = ⊤
+is-etrue _     = ⊥
+
+elit≠etrue : {l : Lit A} → elit l ≠ etrue
+elit≠etrue p = subst is-elit p tt
+
+elit≠efalse : {l : Lit A} → elit l ≠ efalse
+elit≠efalse p = subst is-elit p tt
+
+etrue≠efalse : etrue {A = A} ≠ efalse
+etrue≠efalse p = subst is-etrue p tt
+
+elit-= : (A → A → Bool)
+       → ELit A → ELit A → Bool
+elit-= e (elit l1) (elit l2) = Lit-= e l1 l2
+elit-= e (elit _)  etrue     = false
+elit-= e (elit _)  efalse    = false
+elit-= e  etrue   (elit _)   = false
+elit-= e  etrue    etrue     = true
+elit-= e  etrue    efalse    = false
+elit-= e  efalse  (elit _)   = false
+elit-= e  efalse   etrue     = false
+elit-= e  efalse   efalse    = true
+
+Reflects-elit : {e : A → A → Bool}
+              → (∀ {x y} → Reflects (x ＝ y) (e x y))
+              → ∀ {lx ly} → Reflects (lx ＝ ly) (elit-= e lx ly)
+Reflects-elit r {lx = elit l1} {ly = elit l2} =
+  Reflects.dmap (ap elit) (contra (just-inj ∘ ap unelit))
+    (Reflects-lit r {lx = l1} {ly = l2})
+Reflects-elit r {lx = elit l1} {ly = etrue}   = ofⁿ elit≠etrue
+Reflects-elit r {lx = elit l1} {ly = efalse}  = ofⁿ elit≠efalse
+Reflects-elit r {lx = etrue}   {ly = elit l2} = ofⁿ (elit≠etrue ∘ _⁻¹)
+Reflects-elit r {lx = etrue}   {ly = etrue}   = ofʸ refl
+Reflects-elit r {lx = etrue}   {ly = efalse}  = ofⁿ etrue≠efalse
+Reflects-elit r {lx = efalse}  {ly = elit l2} = ofⁿ (elit≠efalse ∘ _⁻¹)
+Reflects-elit r {lx = efalse}  {ly = etrue}   = ofⁿ (etrue≠efalse ∘ _⁻¹)
+Reflects-elit r {lx = efalse}  {ly = efalse}  = ofʸ refl
+
+instance
+  ELit-is-discrete : ⦃ d : is-discrete A ⦄ → is-discrete (ELit A)
+  ELit-is-discrete ⦃ d ⦄ {x} {y} .does  = elit-= (λ x y → d {x = x} {y = y} .does) x y
+  ELit-is-discrete ⦃ d ⦄         .proof = Reflects-elit (d .proof)
+
+  Show-elit : ⦃ s : Show A ⦄ → Show (ELit A)
+  Show-elit = default-show λ where
+                              (elit l) → show l
+                              etrue → "T"
+                              efalse → "F"
+
+elit→form : ELit A → Formula A
+elit→form (elit l) = lit→form l
+elit→form  etrue   = True
+elit→form  efalse  = False
+
+negelit : ELit A → ELit A
+negelit (elit x) = elit (negate x)
+negelit etrue = efalse
+negelit efalse = etrue
+
+{-
+form→elit : Formula A → Maybe (ELit A)
+form→elit  False   = just efalse
+form→elit  True    = just etrue
+form→elit (Atom x) = just $ elit $ Pos x
+form→elit (Not f)  = map negelit $ form→elit f
+form→elit  _       = nothing
+-}
+
+enegative : ELit A → Bool
+enegative (elit (Neg _)) = true
+enegative  efalse        = true
+enegative  _             = false
+
+epositive : ELit A → Bool
+epositive = not ∘ enegative
+
+enegate : ELit A → ELit A
+enegate (elit l) = elit (negate l)
+enegate  etrue   = efalse
+enegate  efalse  = etrue
+
+eabs : ELit A → ELit A
+eabs lit = if enegative lit then enegate lit else lit
+
+elit-< : (A → A → Bool)
+       → ELit A → ELit A → Bool
+elit-< ord (elit l1) (elit l2) = lit-< ord l1 l2
+elit-< _ (elit _)   etrue    = false
+elit-< _ (elit _)   efalse   = false
+elit-< _  etrue    (elit _)  = true
+elit-< _  etrue     etrue    = false
+elit-< _  etrue     efalse   = true
+elit-< _  efalse   (elit _)  = true
+elit-< _  efalse    etrue    = false
+elit-< _  efalse    efalse   = false
+
 -- NNF
+-- TODO use ELits
 
 data NNF (A : 𝒰) : 𝒰 where
   LitF   : Lit A → NNF A
@@ -186,6 +307,7 @@ _ = hereₘ refl
 -}
 
 -- NENF
+-- TODO use ELits
 
 data NENF (A : 𝒰) : 𝒰 where
   LitEF   : Lit A → NENF A
@@ -297,7 +419,7 @@ _ : "(p ∧ ¬p ∨ p ∧ ¬r) ∨ (q ∧ r) ∧ ¬p ∨ (q ∧ r) ∧ ¬r" ∈ 
 _ = hereₘ refl
 -}
 
--- TODO use LFSet
+-- TODO use LFSet?
 
 Conjunct : 𝒰 → 𝒰
 Conjunct A = List (Lit A)

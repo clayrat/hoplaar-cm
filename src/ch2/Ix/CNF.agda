@@ -37,6 +37,7 @@ open import Base 0ℓ
 open import ch2.Formula
 open import ch2.Ix.Formula
 open import ch2.Ix.NF
+open import ch2.Ix.Lit
 
 private variable
 --  A : 𝒰
