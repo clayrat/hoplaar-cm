@@ -339,6 +339,9 @@ unelit : ELit Γ → Maybe (Lit Γ)
 unelit (elit l) = just l
 unelit  _       = nothing
 
+unevar : {Γ : LFSet A} → ELit Γ → Maybe A
+unevar = map unlit ∘ unelit
+
 is-elit : ELit Γ → 𝒰
 is-elit (elit _) = ⊤
 is-elit  _       = ⊥
@@ -405,36 +408,37 @@ elit→form (elit l) = lit→form l
 elit→form  etrue   = True
 elit→form  efalse  = False
 
-negelit : ELit Γ → ELit Γ
-negelit (elit x) = elit (negate x)
-negelit etrue = efalse
-negelit efalse = etrue
+enegative? : ELit Γ → Bool
+enegative? (elit l) = negative l
+enegative?  efalse  = true
+enegative?  _       = false
 
-enegative : ELit Γ → Bool
-enegative (elit l) = negative l
-enegative  efalse  = true
-enegative  _       = false
-
-epositive : ELit Γ → Bool
-epositive = not ∘ enegative
+epositive? : ELit Γ → Bool
+epositive? = not ∘ enegative?
 
 enegate : ELit Γ → ELit Γ
 enegate (elit l) = elit (negate l)
 enegate  etrue   = efalse
 enegate  efalse  = etrue
 
+enegative-enegate : {l : ELit Γ}
+                  → enegative? (enegate l) ＝ epositive? l
+enegative-enegate {l = elit l} = negative-negate {l = l}
+enegative-enegate {l = etrue}  = refl
+enegative-enegate {l = efalse} = refl
+
 eabs : ELit Γ → ELit Γ
-eabs lit = if enegative lit then enegate lit else lit
+eabs lit = if enegative? lit then enegate lit else lit
 
 eunpack : {Γ : LFSet A} → ELit Γ → Maybe A × Bool
-eunpack = < map unlit ∘ unelit , epositive >
+eunpack = < unevar , epositive? >
 
 epolarize : LFSet A → LFSet (Maybe A × Bool)
 epolarize Γ = (nothing , true) ∷ (nothing , false) ∷ mapₛ (first just) (polarize Γ)
 
 unelit-negative : {y : Lit Γ} {x : ELit Γ}
                 → y ∈ unelit x
-                → negative y ＝ enegative x
+                → negative y ＝ enegative? x
 unelit-negative {x = elit x} = ap negative ∘ unhere
 
 wk-elit : {Γ Δ : LFSet A} → Γ ⊆ Δ → ELit Γ → ELit Δ
@@ -514,7 +518,7 @@ elit-set⊆ {Γ} {l} {x = xm , xb} x∈ =
                             (ap not (unelit-negative z∈) ∙ ap snd xe ⁻¹)) $
               ∈-mapₛ $
               ∈-bind y∈ $
-              ∈-maybe z∈)
+              ⊆-maybe z∈)
            xm)
     (mapₛ-∈ x∈)
 
@@ -661,3 +665,4 @@ tripatoms : {Γ : LFSet A}
 tripatoms (av v _ , d) =
   let (l , r) = unduplet d in
   v ∷ Maybe.rec [] ((_∷ []) ∘ unlit) (unelit l) ++ Maybe.rec [] ((_∷ []) ∘ unlit) (unelit r)
+

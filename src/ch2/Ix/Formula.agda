@@ -64,8 +64,7 @@ avar-ext {a} {b} e =
 
 instance
   AVar-is-discrete : {Γ : LFSet A} → ⦃ d : is-discrete A ⦄ → is-discrete (AVar Γ)
-  AVar-is-discrete ⦃ d ⦄ {x} {y} .does  = d {x = unvar x} {y = unvar y} .does
-  AVar-is-discrete ⦃ d ⦄         .proof = Reflects.dmap avar-ext (contra (ap unvar)) (d .proof)
+  AVar-is-discrete ⦃ d ⦄ = ↣→is-discrete (unvar , avar-ext) d
 
   Show-avar : {Γ : LFSet A} → ⦃ s : Show A ⦄ → Show (AVar Γ)
   Show-avar = default-show λ where

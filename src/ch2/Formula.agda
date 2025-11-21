@@ -268,41 +268,41 @@ atoms-⊆ : ⦃ d : is-discrete A ⦄
 atoms-⊆ {A} {f} =
   elim-formula (λ q → (zs : List A) → over-atoms _∷_ q zs ⊆ (LFSet.from-list zs ∪∷ atomsₛ q))
      (λ zs {x = q} →
-        subst (q ∈_) (∪∷-id-r (LFSet.from-list zs) ⁻¹) ∘ ∈-list)
+        subst (q ∈_) (∪∷-id-r (LFSet.from-list zs) ⁻¹) ∘ ⊆-list)
      (λ zs {x = q} →
-        subst (q ∈_) (∪∷-id-r (LFSet.from-list zs) ⁻¹) ∘ ∈-list)
+        subst (q ∈_) (∪∷-id-r (LFSet.from-list zs) ⁻¹) ∘ ⊆-list)
      (λ a zs {x = q} →
           subst (q ∈_) (  ∪∷-id-r (a ∷ LFSet.from-list zs) ⁻¹
                         ∙ ∪∷-swap {s = LFSet.from-list zs})
-        ∘ ∈-list)
+        ∘ ⊆-list)
      id
      (λ {x} {y} hx hy zs {x = q} →
         subst (q ∈_)
               (  ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs) ⁻¹
                ∙ ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ y})) ∘
-        ⊆-∪∷-r (hy zs ∘ list-∈) ∘
+        ⊆-∪∷-r (hy zs ∘ list-⊆) ∘
         hx (over-atoms _∷_ y zs) {x = q})
      (λ {x} {y} hx hy zs {x = q} →
         subst (q ∈_)
               (  ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs) ⁻¹
                ∙ ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ y})) ∘
-        ⊆-∪∷-r (hy zs ∘ list-∈) ∘
+        ⊆-∪∷-r (hy zs ∘ list-⊆) ∘
         hx (over-atoms _∷_ y zs) {x = q})
      (λ {x} {y} hx hy zs {x = q} →
         subst (q ∈_)
               (  ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs) ⁻¹
                ∙ ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ y})) ∘
-        ⊆-∪∷-r (hy zs ∘ list-∈) ∘
+        ⊆-∪∷-r (hy zs ∘ list-⊆) ∘
         hx (over-atoms _∷_ y zs) {x = q})
      (λ {x} {y} hx hy zs {x = q} →
         subst (q ∈_)
               (  ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs) ⁻¹
                ∙ ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ y})) ∘
-        ⊆-∪∷-r (hy zs ∘ list-∈) ∘
+        ⊆-∪∷-r (hy zs ∘ list-⊆) ∘
         hx (over-atoms _∷_ y zs) {x = q})
      f
      []
-{-     
+{-
   where
   prf2 : {x y : Formula A} {f : Formula A → Formula A → Formula A}
        → ?
@@ -326,34 +326,34 @@ atoms-⊇ : ⦃ d : is-discrete A ⦄
 atoms-⊇ {A} {f} =
   elim-formula (λ q → (zs : List A) → (LFSet.from-list zs ∪∷ atomsₛ q) ⊆ over-atoms _∷_ q zs)
      (λ zs {x = q} →
-        list-∈ ∘ subst (q ∈_) (∪∷-id-r (LFSet.from-list zs)))
+        list-⊆ ∘ subst (q ∈_) (∪∷-id-r (LFSet.from-list zs)))
      (λ zs {x = q} →
-        list-∈ ∘ subst (q ∈_) (∪∷-id-r (LFSet.from-list zs)))
+        list-⊆ ∘ subst (q ∈_) (∪∷-id-r (LFSet.from-list zs)))
      (λ a zs {x = q} →
-        list-∈ ∘ subst (q ∈_) (  ∪∷-swap {s = LFSet.from-list zs} ⁻¹
+        list-⊆ ∘ subst (q ∈_) (  ∪∷-swap {s = LFSet.from-list zs} ⁻¹
                                ∙ ∪∷-id-r (a ∷ LFSet.from-list zs)))
      id
      (λ {x} {y} hx hy zs {x = q} →
         hx (over-atoms _∷_ y zs) {x = q} ∘
-        ⊆-∪∷-r (∈-list ∘ hy zs) ∘
+        ⊆-∪∷-r (⊆-list ∘ hy zs) ∘
         subst (q ∈_)
               (  ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ x})
                ∙ ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs)))
      (λ {x} {y} hx hy zs {x = q} →
         hx (over-atoms _∷_ y zs) {x = q} ∘
-        ⊆-∪∷-r (∈-list ∘ hy zs) ∘
+        ⊆-∪∷-r (⊆-list ∘ hy zs) ∘
         subst (q ∈_)
               (  ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ x})
                ∙ ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs)))
      (λ {x} {y} hx hy zs {x = q} →
         hx (over-atoms _∷_ y zs) {x = q} ∘
-        ⊆-∪∷-r (∈-list ∘ hy zs) ∘
+        ⊆-∪∷-r (⊆-list ∘ hy zs) ∘
         subst (q ∈_)
               (  ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ x})
                ∙ ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs)))
      (λ {x} {y} hx hy zs {x = q} →
         hx (over-atoms _∷_ y zs) {x = q} ∘
-        ⊆-∪∷-r (∈-list ∘ hy zs) ∘
+        ⊆-∪∷-r (⊆-list ∘ hy zs) ∘
         subst (q ∈_)
               (  ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ x})
                ∙ ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs)))

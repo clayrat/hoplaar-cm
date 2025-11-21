@@ -13,10 +13,11 @@ open import Data.Unit
 open import Data.Empty
 open import Data.Bool
 open import Data.Reflects as Reflects
-open import Data.Dec
+open import Data.Dec as Dec
 open import Data.Nat
 open import Data.Nat.Order.Base
 open import Data.Maybe as Maybe
+open import Data.Maybe.Correspondences.Unary.All renaming (All to Allₘ)
 open import Data.List as List
 open import Data.List.Operations.Discrete
 open import Data.String
@@ -110,7 +111,7 @@ instance
 
 align-pol : Eqv Γ → Eqv Γ
 align-pol (p , q) =
-  if enegative p
+  if enegative? p
     then enegate p , enegate q
     else p , q
 
@@ -170,3 +171,114 @@ triggers fm =
       raw = map (λ pq → pq , consequences pq fm eqs) eqs
     in
   filter (is-cons? ∘ snd) raw
+
+-- TODO move to KVMapU
+lookupm∈ : {K V : 𝒰} ⦃ d : is-discrete K ⦄
+         → (m : KVMap K V) (k : K)
+         → k ∈ keysm m
+         → V
+lookupm∈ {V} m a a∈ =
+  Maybe.elim
+    (λ q → lookupm m a ＝ q → V)
+    (λ n → absurd (lookup→∉ (m .inv) n a∈))
+    (λ x _ → x)
+    (lookupm m a) refl
+
+esubst : {Γ Δ : Ctx}
+       → (m : KVMap Var (ELit Δ))
+       → (l : ELit Γ)
+       → Allₘ (_∈ keysm m) (unevar l)
+       → ELit Δ
+esubst sub (elit (Pos l)) (just p) = lookupm∈ sub (unvar l) p
+esubst sub (elit (Neg l)) (just p) = enegate (lookupm∈ sub (unvar l) p)
+esubst sub  etrue          _       = etrue
+esubst sub  efalse         _       = efalse
+
+pqrlist : List Var
+pqrlist = "p" ∷ "q" ∷ "r" ∷ []
+
+pqr : Ctx
+pqr = from-list pqrlist
+
+inst-trigger : AVar Γ × ELit Γ × ELit Γ → List (Trigger pqr) → List (Trigger Γ)
+inst-trigger {Γ} = map ∘ instnfn
+  where
+  aux : (e : ELit pqr) → Allₘ (_∈ pqrlist) (unevar e)
+  aux (elit x) = just (list-⊆ (unlit∈ x))
+  aux  etrue   = nothing
+  aux  efalse  = nothing
+  instfn : AVar Γ × ELit Γ × ELit Γ → ELit pqr → ELit Γ
+  instfn (x , y , z) e =
+    let sub : KVMap Var (ELit Γ)
+        sub = insertm "r" z $
+              insertm "q" y $
+              insertm "p" (elit $ Pos x) $
+              emptym
+      in
+    esubst sub e (aux e)
+  inst2fn : AVar Γ × ELit Γ × ELit Γ → Eqv pqr → Eqv Γ
+  inst2fn i (p , q) = align (instfn i p , instfn i q)
+  instnfn : AVar Γ × ELit Γ × ELit Γ → Trigger pqr → Trigger Γ
+  instnfn i (a , c) = inst2fn i a , map (inst2fn i) c
+
+trigger' : ({Γ : Ctx} → Formulaᵢ Γ → Formulaᵢ Γ → Formulaᵢ Γ)
+         → List (Trigger pqr)
+trigger' op = triggers $ Iff (Atom p') (op (Atom q') (Atom r'))
+  where
+  p' : AVar pqr
+  p' = av "p" (hereₛ refl)
+  q' : AVar pqr
+  q' = av "q" (thereₛ $ hereₛ refl)
+  r' : AVar pqr
+  r' = av "r" (thereₛ $ thereₛ $ hereₛ refl)
+
+trigger : Triplet Γ → List (Trigger Γ)
+trigger (x , duand y z) = inst-trigger (x , y , z) $ trigger' And
+trigger (x , duor  y z) = inst-trigger (x , y , z) $ trigger' Or
+trigger (x , duiff y z) = inst-trigger (x , y , z) $ trigger' Iff
+
+-- 0-saturation
+
+ListMap : 𝒰 → 𝒰 → 𝒰
+ListMap K V = KVMap K (List V)
+
+look : {K V : 𝒰} ⦃ d : is-discrete K ⦄ → ListMap K V → K → List V
+look m l = Maybe.rec [] id (lookupm m l)
+
+TrigMap : LFSet A → 𝒰
+TrigMap Γ = ListMap (ELit Γ) (Trigger Γ)
+
+relevance : List (Trigger Γ) → TrigMap Γ
+relevance {Γ} trigs =
+  List.rec (the (TrigMap Γ) emptym) insert-relevant2 trigs
+  where
+  insert-relevant : ELit Γ → Trigger Γ → TrigMap Γ → TrigMap Γ
+  insert-relevant p trg f =
+    insertm p (insert-s trg (look f p)) f
+  insert-relevant2 : Trigger Γ → TrigMap Γ → TrigMap Γ
+  insert-relevant2 trg@((p , q) , _) =
+    insert-relevant p trg ∘ insert-relevant q trg
+
+Erf : ⦃ d : is-discrete A ⦄ → LFSet A → 𝒰
+Erf Γ = EClass Γ × TrigMap Γ
+
+equatecons : Eqv Γ → Erf Γ → List (Eqv Γ) × Erf Γ
+equatecons (p0 , q0) erf@(eqv , rfn) =
+  let p = canonize eqv p0
+      q = canonize eqv q0
+    in
+  if p =? q
+    then [] , erf
+    else
+      let p' = canonize eqv (enegate p0)
+          q' = canonize eqv (enegate q0)
+          eqv' = equate2 (p , q) eqv
+          sp-pos = look rfn p
+          sp-neg = look rfn p'
+          sq-pos = look rfn q
+          sq-neg = look rfn q'
+          rfn' = insertm (canonize eqv' p)  (union sp-pos sq-pos) $
+                 insertm (canonize eqv' p') (union sp-neg sq-neg) rfn
+          nw = union (intersect sp-pos sq-pos) (intersect sp-neg sq-neg)
+        in
+      (List.rec [] (union ∘ snd) nw) , (eqv' , rfn')
