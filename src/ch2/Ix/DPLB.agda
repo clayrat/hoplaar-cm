@@ -63,6 +63,7 @@ open import ch2.Formula using (Var)
 open import ch2.Sem
 open import ch2.Appl
 open import ch2.Ix.Formula
+open import ch2.Ix.Lit
 open import ch2.Ix.NF
 open import ch2.Ix.CNF
 open import ch2.Ix.DP
@@ -75,6 +76,8 @@ private variable
 
 -- iterative + backjumping + clause learning
 -- aka CDCL
+
+-- TODO unify with DPLI
 
 data Trailmix : 𝒰 where
   guessed deduced : Trailmix
@@ -133,21 +136,6 @@ trail-pvars-++ {tr1} {tr2} =
 count-guessed : Trail Γ → ℕ
 count-guessed = count (is-guessed? ∘ snd)
 
-polarize : Ctx → LFSet (Var × Bool)
-polarize Γ = mapₛ (_, true) Γ ∪∷ mapₛ (_, false) Γ
-
-size-polarize : sizeₛ (polarize Γ) ＝ sizeₛ Γ + sizeₛ Γ
-size-polarize =
-    size-∪∷-∥ₛ
-      (λ x∈t x∈f →
-          rec! (λ xt xt∈ xte →
-                 rec! (λ xf xf∈ xfe →
-                        false! (ap snd xte ⁻¹ ∙ ap snd xfe))
-                      (mapₛ-∈ x∈f))
-               (mapₛ-∈ x∈t))
-  ∙ ap² _+_ (size-map-inj (ap fst))
-            (size-map-inj (ap fst))
-
 {-
 -- TODO duplication but it's probably more hassle to fiddle with eliminators
 trail-pvars⊆ : {tr : Trail Γ} → trail-pvars tr ⊆ polarize Γ
@@ -159,24 +147,6 @@ trail-pvars⊆ {Γ} {x = xl , true}  x∈ =
   let (y , y∈ , ye) = List.map-∈Σ _ x∈ in
   ∈ₛ-∪∷←l (∈-mapₛ (subst (_∈ Γ) (ap fst ye ⁻¹) (unlit∈ y)))
 -}
-
--- TODO duplication again!
-lit-set⊆ : {l : LFSet (Lit Γ)} → mapₛ < unlit , positive > l ⊆ polarize Γ
-lit-set⊆ {Γ} {x = xl , false} x∈ =
-  rec! (λ y y∈ ye →
-           ∈ₛ-∪∷←r {s₁ = mapₛ (_, true) Γ}
-                   (∈-mapₛ (subst (_∈ Γ) (ap fst ye ⁻¹) (unlit∈ y))))
-    (mapₛ-∈ x∈)
-lit-set⊆ {Γ} {x = xl , true}  x∈ =
-  rec! (λ y y∈ ye →
-           ∈ₛ-∪∷←l (∈-mapₛ (subst (_∈ Γ) (ap fst ye ⁻¹) (unlit∈ y))))
-    (mapₛ-∈ x∈)
-
-lit-set-size : {l : LFSet (Lit Γ)} → sizeₛ l ≤ 2 · sizeₛ Γ
-lit-set-size {Γ} =
-    =→≤ (size-map-inj unlit-positive-inj ⁻¹)
-  ∙ size-⊆ lit-set⊆
-  ∙ =→≤ (size-polarize ∙ ap (sizeₛ Γ +_) (+-zero-r (sizeₛ Γ) ⁻¹))
 
 -- a proper trail mentions each literal once
 Trail-Inv : Trail Γ → 𝒰
@@ -190,7 +160,7 @@ push-trailinv : {tr : Trail Γ} {p : Lit Γ} {tm : Trailmix}
               → Trail-Inv tr
               → Trail-Inv ((p , tm) ∷ tr)
 push-trailinv p∉ ti =
-  contra (map-∈ _ unlit-positive-inj) p∉ ∷ᵘ ti
+  contra (map-∈ _ unpack-inj) p∉ ∷ᵘ ti
 
 prepend-trailinv : {tr tr' : Trail Γ}
                  → Trail-Inv tr'
@@ -203,7 +173,7 @@ prepend-trailinv {tr} {tr'} ti' ti dj =
          ∙ ap (map < unlit , positive >)
             (trail-lits-++ {tr1 = tr'}) ⁻¹) $
   uniq→++ ti' ti $
-  ∥-map unlit-positive-inj dj
+  ∥-map unpack-inj dj
 
 opaque
   unfolding Suffix
@@ -219,7 +189,7 @@ trail-inv≤ {Γ} {tr} ti =
     =→≤ (  map-length ⁻¹ ∙ map-length ⁻¹
          ∙ size-unique ti ⁻¹
          ∙ ap sizeₛ (from-list-map {xs = trail-lits tr}) ⁻¹
-         ∙ size-map-inj unlit-positive-inj)
+         ∙ size-map-inj unpack-inj)
   ∙ lit-set-size
 
 backtrack : Trail Γ → Maybe (Lit Γ × Trail Γ)
@@ -959,7 +929,7 @@ unit-subpropagate-loop {x} ih {Γ} cls tr e ti ti2 =
 
   tiu : Trail-Inv tru
   tiu =
-    uniq-map unlit-positive-inj $
+    uniq-map unpack-inj $
     subst Uniq (nueq ⁻¹) $
     nub-unique {R = λ _ _ → Lit-is-discrete .proof}
                {xs = concat (filter (is-fresh-unit-clause tr) cls')}

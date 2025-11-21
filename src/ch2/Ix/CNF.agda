@@ -60,71 +60,78 @@ open KVOps
 open KVOps2
 
 FM : Ctx → 𝒰
-FM Γ = KVMap (Formulaᵢ Γ) (Formulaᵢ Γ × Formulaᵢ Γ)
+FM Γ = KVMap (Duplet Γ) (Triplet Γ)
 
--- should be computational no-op
 wk-fm : Γ ⊆ Δ → FM Γ → FM Δ
-wk-fm s = bimapm (wk s) wk-inj (λ where (x , y) → (wk s x , wk s y))
+wk-fm s =
+  bimapm (wk-duplet s) wk-duplet-inj
+    (λ where (v , d) → (wk-avar s v , wk-duplet s d))
 
 Trip : Ctx → 𝒰
-Trip Γ = Formulaᵢ Γ × FM Γ × ℕ
+Trip Γ = ELit Γ × FM Γ × ℕ
 
--- induction on formula height
-FHI-ty : ℕ → 𝒰
-FHI-ty x = {Θ : Ctx} → (f : Formulaᵢ Θ) → x ＝ height f
+-- induction on NENF height
+NHI-ty : ℕ → 𝒰
+NHI-ty x = {Θ : Ctx} → (f : NENF Θ) → x ＝ height-nenf f
                      → FM Θ → ℕ
                      → Σ[ Δ ꞉ Ctx ] (Trip (Δ ∪∷ Θ))
 
--- induction on a height of a product of formulas
-FHI×-ty : ℕ → 𝒰
-FHI×-ty x = {Θ : Ctx} → (p : Formulaᵢ Θ) → (q : Formulaᵢ Θ) → x ＝ 1 + max (height p) (height q)
+-- induction on a height of a product of NENFs
+NHI×-ty : ℕ → 𝒰
+NHI×-ty x = {Θ : Ctx} → (p : NENF Θ) → (q : NENF Θ) → x ＝ 1 + max (height-nenf p) (height-nenf q)
                       → FM Θ → ℕ
                       → Σ[ Δ ꞉ Ctx ] (Trip (Δ ∪∷ Θ))
 
 -- TODO try defining Box for Formulas?
 -- we only need WF here for a recursive call on `wk _ q`
-defstep : ({Θ : Ctx} → Formulaᵢ Θ → Formulaᵢ Θ → Formulaᵢ Θ)
-        → ∀[ □ FHI-ty ⇒ FHI×-ty ]
+defstep : ({Θ : Ctx} → ELit Θ → ELit Θ → Duplet Θ)
+        → ∀[ □ NHI-ty ⇒ NHI×-ty ]
 defstep op ih {Θ} p q e defs n =
-  let (Δp , (fm1 , defs1 , n1)) = Box.call ih (<-≤-trans (≤≃<suc $ l≤∪)
+  let (Δp , (el1 , defs1 , n1)) = Box.call ih (<-≤-trans (≤≃<suc $ l≤∪)
                                                          (=→≤ (e ⁻¹)))
                                               p refl defs n
-      (Δq , (fm2 , defs2 , n2)) = Box.call ih (<-≤-trans (≤-<-trans (=→≤ (height-wk q))
-                                                                    (≤≃<suc $ r≤∪ {x = height p}))
+      (Δq , (el2 , defs2 , n2)) = Box.call ih (<-≤-trans (≤-<-trans (=→≤ (height-nenf-wk q))
+                                                                    (≤≃<suc $ r≤∪ {x = height-nenf p}))
                                                          (=→≤ (e ⁻¹)))
-                                              (wk (∈ₛ-∪∷←r {s₁ = Δp}) q) refl defs1 n1
-      fm' = op (wk (∈ₛ-∪∷←r {s₁ = Δq}) fm1) fm2
+                                              (wk-nenf (∈ₛ-∪∷←r {s₁ = Δp}) q) refl defs1 n1
+      d' = op (wk-elit (∈ₛ-∪∷←r {s₁ = Δq}) el1) el2
     in
   Maybe.rec
     -- add a new atom
     (let x = "p_" ++ₛ show-ℕ n2
-         v = Atom x (∈ₛ-∪∷←l {s₂ = Θ} (hereₛ {xs = Δq ∪∷ Δp} refl))
+         v = Pos (av x (∈ₛ-∪∷←l {s₂ = Θ} (hereₛ {xs = Δq ∪∷ Δp} refl)))
          s : (Δq ∪∷ Δp ∪∷ Θ) ⊆ ((x ∷ Δq ∪∷ Δp) ∪∷ Θ)
          s = λ {x = z} → subst (z ∈_) (∪∷-assoc (x ∷ Δq)) ∘ thereₛ
        in
        x ∷ Δq ∪∷ Δp
-     , v
-     , (insertm (wk s fm') (v , Iff v (wk s fm')) $
-        wk-fm s defs2)
+     , elit v -- v
+     , insertm (wk-duplet s d')
+               (lit→atomvar v , wk-duplet s d')
+               (wk-fm s defs2)
      , suc n2)
     (λ (v , _) →
          let s : (Δq ∪∷ Δp ∪∷ Θ) ⊆ ((Δq ∪∷ Δp) ∪∷ Θ)
              s = λ {x = z} → subst (z ∈_) (∪∷-assoc Δq)
            in
-         (Δq ∪∷ Δp) , wk s v , wk-fm s defs2 , n2)
-    (lookupm defs2 fm')
+           (Δq ∪∷ Δp)
+         , elit (Pos (wk-avar s v))
+         , wk-fm s defs2
+         , n2)
+    (lookupm defs2 d')
 
-maincnf-loop : ∀[ □ FHI-ty ⇒ FHI-ty ]
-maincnf-loop ih (And p q) e defs n = defstep And ih p q e defs n
-maincnf-loop ih (Or  p q) e defs n = defstep Or ih p q e defs n
-maincnf-loop ih (Iff p q) e defs n = defstep Iff ih p q e defs n
-maincnf-loop ih  f        _ defs n = [] , (f , defs , n)
+maincnf-loop : ∀[ □ NHI-ty ⇒ NHI-ty ]
+maincnf-loop ih (LitEF l)   eq defs n = [] , elit l , defs , n
+maincnf-loop ih  TrueEF     eq defs n = [] , etrue , defs , n
+maincnf-loop ih  FalseEF    eq defs n = [] , efalse , defs , n
+maincnf-loop ih (AndEF p q) eq defs n = defstep duand ih p q eq defs n
+maincnf-loop ih (OrEF p q)  eq defs n = defstep duor ih p q eq defs n
+maincnf-loop ih (IffEF p q) eq defs n = defstep duiff ih p q eq defs n
 
-maincnf : Formulaᵢ Γ → FM Γ → ℕ
+maincnf : NENF Γ → FM Γ → ℕ
         → Σ[ Δ ꞉ Ctx ] (Trip (Δ ∪∷ Γ))
 maincnf f defs n =
   Box.fix
-    FHI-ty
+    NHI-ty
     maincnf-loop
     f refl defs n
 
@@ -138,63 +145,81 @@ max-var-ix pfx s n =
     else (Maybe.rec n (max n) $
           parseℕ $ substring m (l ∸ m) s)
 
-mk-defcnf : (Formulaᵢ Γ → FM Γ → ℕ → Σ[ Δ ꞉ Ctx ] (Trip (Δ ∪∷ Γ)))
-           → Formulaᵢ Γ            → Σ[ Δ ꞉ Ctx ] (CNF  (Δ ∪∷ Γ))
+TripF : Ctx → 𝒰
+TripF Γ = Formulaᵢ Γ × FM Γ × ℕ
+
+wk-exttrip : Σ[ Δ ꞉ Ctx ] (Trip (Δ ∪∷ Γ)) → Σ[ Δ ꞉ Ctx ] (TripF (Δ ∪∷ Γ))
+wk-exttrip (Δ , (e , defs , n)) = Δ , (elit→form e , defs , n)
+
+mk-defcnf : (NENF Γ → FM Γ → ℕ → Σ[ Δ ꞉ Ctx ] (TripF (Δ ∪∷ Γ)))
+           → Formulaᵢ Γ        → Σ[ Δ ꞉ Ctx ] (CNF  (Δ ∪∷ Γ))
 mk-defcnf fn fm =
-  let fm' = nenf→form $ nenf0 fm
-      n = suc (over-atomsᵢ (max-var-ix "p_") fm' 0)
-      (Δ , fm'' , defs , _) = fn fm' emptym n
+  let fm' = nenf0 fm
+      n = suc (over-varsᵢ (max-var-ix "p_") (nenf→formᵢ fm') 0)
+      (Δ , e , defs , _) = fn fm' emptym n
       deflist = map snd (valsm defs)
     in
-  Δ , unions (simpcnf fm'' ∷ map simpcnf deflist)
+  Δ , unions (simpcnf (e) ∷ map (simpcnf ∘ duplet→form) deflist)
 
 defcnf : Formulaᵢ Γ → Σ[ Δ ꞉ Ctx ] (Formulaᵢ (Δ ∪∷ Γ))
 defcnf f =
-  let Δc = mk-defcnf maincnf f in
+  let Δc = mk-defcnf (λ ne f → wk-exttrip ∘ maincnf ne f) f in
   (Δc .fst , cnf→form (Δc . snd))
 
 -- optimizations
 
 -- WF again
 
+-- induction on NENF height
+NHIF-ty : ℕ → 𝒰
+NHIF-ty x = {Θ : Ctx} → (f : NENF Θ) → x ＝ height-nenf f
+                      → FM Θ → ℕ
+                      → Σ[ Δ ꞉ Ctx ] (TripF (Δ ∪∷ Θ))
+
+-- induction on a height of a product of NENFs
+NHI×F-ty : ℕ → 𝒰
+NHI×F-ty x = {Θ : Ctx} → (p : NENF Θ) → (q : NENF Θ) → x ＝ 1 + max (height-nenf p) (height-nenf q)
+                      → FM Θ → ℕ
+                      → Σ[ Δ ꞉ Ctx ] (TripF (Δ ∪∷ Θ))
+
 subcnf : ({Θ : Ctx} → Formulaᵢ Θ → Formulaᵢ Θ → Formulaᵢ Θ)
-       → ∀[ □ FHI-ty ⇒ FHI×-ty ]
+       → ∀[ □ NHIF-ty ⇒ NHI×F-ty ]
 subcnf op ih {Θ} p q e defs n =
-  let (Δp , (fm1 , defs1 , n1)) = Box.call ih (<-≤-trans (≤≃<suc $ l≤∪)
+  let (Δp , (f1 , defs1 , n1)) = Box.call ih (<-≤-trans (≤≃<suc $ l≤∪)
                                                          (=→≤ (e ⁻¹)))
                                               p refl defs n
-      (Δq , (fm2 , defs2 , n2)) = Box.call ih (<-≤-trans (≤-<-trans (=→≤ (height-wk q))
-                                                                    (≤≃<suc $ r≤∪ {x = height p}))
+      (Δq , (f2 , defs2 , n2)) = Box.call ih (<-≤-trans (≤-<-trans (=→≤ (height-nenf-wk q))
+                                                                    (≤≃<suc $ r≤∪ {x = height-nenf p}))
                                                          (=→≤ (e ⁻¹)))
-                                              (wk (∈ₛ-∪∷←r {s₁ = Δp}) q) refl defs1 n1
+                                              (wk-nenf (∈ₛ-∪∷←r {s₁ = Δp}) q) refl defs1 n1
       s : (Δq ∪∷ Δp ∪∷ Θ) ⊆ ((Δq ∪∷ Δp) ∪∷ Θ)
       s = λ {x = z} → subst (z ∈_) (∪∷-assoc Δq)
     in
     Δq ∪∷ Δp
-  , op (wk (s ∘ ∈ₛ-∪∷←r {s₁ = Δq}) fm1)
-       (wk  s                      fm2)
+  , op (wk (s ∘ ∈ₛ-∪∷←r {s₁ = Δq}) f1)
+       (wk  s                      f2)
   , wk-fm s defs2
   , n2
 
-or-cnf-loop : ∀[ □ FHI-ty ⇒ FHI-ty ]
-or-cnf-loop ih (Or p q) e defs n = subcnf Or ih p q e defs n
-or-cnf-loop _   f       _ defs n = maincnf f defs n
+or-cnf-loop : ∀[ □ NHIF-ty ⇒ NHIF-ty ]
+or-cnf-loop ih (OrEF p q) e defs n = subcnf Or ih p q e defs n
+or-cnf-loop _   f         _ defs n = wk-exttrip $ maincnf f defs n
 
-or-cnf : Formulaᵢ Γ → FM Γ → ℕ → Σ[ Δ ꞉ Ctx ] (Trip (Δ ∪∷ Γ))
+or-cnf : NENF Γ → FM Γ → ℕ → Σ[ Δ ꞉ Ctx ] (TripF (Δ ∪∷ Γ))
 or-cnf f defs n =
   Box.fix
-    FHI-ty
+    NHIF-ty
     or-cnf-loop
     f refl defs n
 
-and-cnf-loop : ∀[ □ FHI-ty ⇒ FHI-ty ]
-and-cnf-loop ih (And p q) e defs n = subcnf And ih p q e defs n
-and-cnf-loop _   f        _ defs n = or-cnf f defs n
+and-cnf-loop : ∀[ □ NHIF-ty ⇒ NHIF-ty ]
+and-cnf-loop ih (AndEF p q) e defs n = subcnf And ih p q e defs n
+and-cnf-loop _   f          _ defs n = or-cnf f defs n
 
-and-cnf : Formulaᵢ Γ → FM Γ → ℕ → Σ[ Δ ꞉ Ctx ] (Trip (Δ ∪∷ Γ))
+and-cnf : NENF Γ → FM Γ → ℕ → Σ[ Δ ꞉ Ctx ] (TripF (Δ ∪∷ Γ))
 and-cnf f defs n =
   Box.fix
-    FHI-ty
+    NHIF-ty
     and-cnf-loop
     f refl defs n
 
@@ -208,14 +233,14 @@ defcnf' f =
 
 -- 3-CNF
 
-and-cnf3-loop : ∀[ □ FHI-ty ⇒ FHI-ty ]
-and-cnf3-loop ih (And p q) e defs n = subcnf And ih p q e defs n
-and-cnf3-loop _   f        _ defs n = maincnf f defs n
+and-cnf3-loop : ∀[ □ NHIF-ty ⇒ NHIF-ty ]
+and-cnf3-loop ih (AndEF p q) e defs n = subcnf And ih p q e defs n
+and-cnf3-loop _   f          _ defs n = wk-exttrip $ maincnf f defs n
 
-and-cnf3 : Formulaᵢ Γ → FM Γ → ℕ → Σ[ Δ ꞉ Ctx ] (Trip (Δ ∪∷ Γ))
+and-cnf3 : NENF Γ → FM Γ → ℕ → Σ[ Δ ꞉ Ctx ] (TripF (Δ ∪∷ Γ))
 and-cnf3 f defs n =
   Box.fix
-    FHI-ty
+    NHIF-ty
     and-cnf3-loop
     f refl defs n
 

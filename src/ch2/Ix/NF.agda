@@ -20,7 +20,7 @@ open import Data.Maybe as Maybe
 open import Data.Maybe.Correspondences.Unary.Any renaming (here to hereₘ)
 open import Data.List as List
 open import Data.List.Operations.Properties
-open import Data.List.Operations.Discrete
+open import Data.List.Operations.Discrete renaming (rem to remₗ)
 open import Data.List.Correspondences.Binary.OPE
 open import Data.List.Operations.Rel
 open import Data.Sum
@@ -33,8 +33,9 @@ open import LFSet.Discrete
 
 open import ListSet
 open import ch2.Formula
-open import ch2.Sem
+-- open import ch2.Sem
 open import ch2.Ix.Formula
+open import ch2.Ix.Sem
 open import ch2.Ix.Lit
 
 private variable
@@ -98,24 +99,24 @@ nnf→form (OrF x y)  = Or (nnf→form x) (nnf→form y)
 
 mutual
   nnf : Formulaᵢ Γ → NNF Γ
-  nnf  False     = FalseF
-  nnf  True      = TrueF
-  nnf (Atom a m) = LitF (Pos a m)
-  nnf (Not x)    = nnfNot x
-  nnf (And x y)  = AndF (nnf x) (nnf y)
-  nnf (Or x y)   = OrF (nnf x) (nnf y)
-  nnf (Imp x y)  = OrF (nnfNot x) (nnf y)
-  nnf (Iff x y)  = OrF (AndF (nnf x) (nnf y)) (AndF (nnfNot x) (nnfNot y))
+  nnf  False    = FalseF
+  nnf  True     = TrueF
+  nnf (Atom a)  = LitF (Pos a)
+  nnf (Not x)   = nnfNot x
+  nnf (And x y) = AndF (nnf x) (nnf y)
+  nnf (Or x y)  = OrF (nnf x) (nnf y)
+  nnf (Imp x y) = OrF (nnfNot x) (nnf y)
+  nnf (Iff x y) = OrF (AndF (nnf x) (nnf y)) (AndF (nnfNot x) (nnfNot y))
 
   nnfNot : Formulaᵢ Γ → NNF Γ
-  nnfNot  False     = TrueF
-  nnfNot  True      = FalseF
-  nnfNot (Atom a m) = LitF (Neg a m)
-  nnfNot (Not x)    = nnf x
-  nnfNot (And x y)  = OrF (nnfNot x) (nnfNot y)
-  nnfNot (Or x y)   = AndF (nnfNot x) (nnfNot y)
-  nnfNot (Imp x y)  = AndF (nnf x) (nnfNot y)
-  nnfNot (Iff x y)  = OrF (AndF (nnf x) (nnfNot y)) (AndF (nnfNot x) (nnf y))
+  nnfNot  False    = TrueF
+  nnfNot  True     = FalseF
+  nnfNot (Atom a)  = LitF (Neg a)
+  nnfNot (Not x)   = nnf x
+  nnfNot (And x y) = OrF (nnfNot x) (nnfNot y)
+  nnfNot (Or x y)  = AndF (nnfNot x) (nnfNot y)
+  nnfNot (Imp x y) = AndF (nnf x) (nnfNot y)
+  nnfNot (Iff x y) = OrF (AndF (nnf x) (nnfNot y)) (AndF (nnfNot x) (nnf y))
 
 nnf0 : Formulaᵢ Γ → NNF Γ
 nnf0 = nnf ∘ psimplify
@@ -145,19 +146,53 @@ data NENF (Γ : LFSet A) : 𝒰 where
   OrEF    : NENF Γ → NENF Γ → NENF Γ
   IffEF   : NENF Γ → NENF Γ → NENF Γ
 
-nenf→form : NENF Γ  → Formulaᵢ Γ
-nenf→form (LitEF l)   = lit→form l
-nenf→form  TrueEF     = True
-nenf→form  FalseEF    = False
-nenf→form (AndEF x y) = And (nenf→form x) (nenf→form y)
-nenf→form (OrEF x y)  = Or (nenf→form x) (nenf→form y)
-nenf→form (IffEF x y) = Iff (nenf→form x) (nenf→form y)
+wk-nenf : {Γ Δ : LFSet A}
+        → Γ ⊆ Δ → NENF Γ → NENF Δ
+wk-nenf s (LitEF l)   = LitEF (wk-lit s l)
+wk-nenf s  TrueEF     = TrueEF
+wk-nenf s  FalseEF    = FalseEF
+wk-nenf s (AndEF x y) = AndEF (wk-nenf s x) (wk-nenf s y)
+wk-nenf s (OrEF x y)  = OrEF (wk-nenf s x) (wk-nenf s y)
+wk-nenf s (IffEF x y) = IffEF (wk-nenf s x) (wk-nenf s y)
+
+nenf→formᵢ : NENF Γ  → Formulaᵢ Γ
+nenf→formᵢ (LitEF l)   = lit→form l
+nenf→formᵢ  TrueEF     = True
+nenf→formᵢ  FalseEF    = False
+nenf→formᵢ (AndEF x y) = And (nenf→formᵢ x) (nenf→formᵢ y)
+nenf→formᵢ (OrEF x y)  = Or (nenf→formᵢ x) (nenf→formᵢ y)
+nenf→formᵢ (IffEF x y) = Iff (nenf→formᵢ x) (nenf→formᵢ y)
+
+wk-nenf-form : {Γ Δ : LFSet A} {s : Γ ⊆ Δ}
+             → (f : NENF Γ)
+             → nenf→formᵢ (wk-nenf s f) ＝ wk s (nenf→formᵢ f)
+wk-nenf-form {s} (LitEF l) = wk-lit-form l
+wk-nenf-form {s} TrueEF = refl
+wk-nenf-form {s} FalseEF = refl
+wk-nenf-form {s} (AndEF x y) =
+  ap² {C = λ _ _ → Formulaᵢ _}
+    And (wk-nenf-form x) (wk-nenf-form y)
+wk-nenf-form {s} (OrEF x y) =
+  ap² {C = λ _ _ → Formulaᵢ _}
+    Or (wk-nenf-form x) (wk-nenf-form y)
+wk-nenf-form {s} (IffEF x y) =
+  ap² {C = λ _ _ → Formulaᵢ _}
+    Iff (wk-nenf-form x) (wk-nenf-form y)
+
+height-nenf : NENF Γ → ℕ
+height-nenf = height ∘ nenf→formᵢ
+
+height-nenf-wk : {Γ Δ : LFSet A} {s : Γ ⊆ Δ}
+               → (f : NENF Γ)
+               → height-nenf (wk-nenf s f) ＝ height-nenf f
+height-nenf-wk {s} f =
+ ap height (wk-nenf-form f) ∙ height-wk (nenf→formᵢ f)
 
 mutual
   nenf : Formulaᵢ Γ → NENF Γ
   nenf  False    = FalseEF
   nenf  True     = TrueEF
-  nenf (Atom a m)  = LitEF (Pos a m)
+  nenf (Atom a)  = LitEF (Pos a)
   nenf (Not x)   = nenfNot x
   nenf (And x y) = AndEF (nenf x) (nenf y)
   nenf (Or x y)  = OrEF (nenf x) (nenf y)
@@ -167,7 +202,7 @@ mutual
   nenfNot : Formulaᵢ Γ → NENF Γ
   nenfNot  False    = TrueEF
   nenfNot  True     = FalseEF
-  nenfNot (Atom a m)  = LitEF (Neg a m)
+  nenfNot (Atom a)  = LitEF (Neg a)
   nenfNot (Not x)   = nenf x
   nenfNot (And x y) = OrEF (nenfNot x) (nenfNot y)
   nenfNot (Or x y)  = AndEF (nenfNot x) (nenfNot y)
@@ -213,13 +248,13 @@ list-disjΣ =
   ∘ List⁺.from-list
 
 mklits : {Γ : LFSet A}
-       → List (Formulaᵢ Γ) → Val A → Formulaᵢ Γ
-mklits pvs v = list-conj $ map (λ p → if evalᵢ p v then p else Not p) pvs
+       → List (Formulaᵢ Γ) → Val Γ → Formulaᵢ Γ
+mklits pvs v = list-conj $ map (λ p → if eval p v then p else Not p) pvs
   --   map (λ p → if eval p v then p else Not p) pvs
 
-all-sat-vals : ⦃ d : is-discrete A ⦄
-             → (Val A → Bool)
-             → Val A → List A → List (Val A)
+all-sat-vals : ⦃ d : is-discrete A ⦄ {Γ : LFSet A}
+             → (Val Γ → Bool)
+             → Val Γ → List A → List (Val Γ)
 all-sat-vals s v  []      = if s v then v ∷ [] else []
 all-sat-vals s v (p ∷ ps) =
      all-sat-vals s (modify p false v) ps
@@ -229,13 +264,15 @@ dnf-naive : {Γ : LFSet A}
           → ⦃ d : is-discrete A ⦄
           → Formulaᵢ Γ → Formulaᵢ Γ
 dnf-naive f =
-  let ps = atomsᵢ f
-      sv = all-sat-vals (evalᵢ f) (λ _ → false) ps
+  let ps = varsᵢ f
+      sv = all-sat-vals (eval f) (λ _ → false) ps
     in
   list-disj $
-  map (mklits (map-with-∈ ps (λ a a∈ → Atom a (atomsᵢ-⊆ {f = f}
-                                                        (ope→subset (nub-ope {cmp = _=?_}) a∈))
-                                              ))) sv
+  map (mklits (map-with-∈ ps (λ a a∈ →
+   let a∈' = varsᵢ-⊆ {f = f}
+               (map-⊆ unvar (ope→subset (nub-ope {cmp = _=?_})) a∈)
+             in
+   Atom (av a a∈')))) sv
 
 {-
 fm1 : String
@@ -336,6 +373,28 @@ _ = hereₘ refl
 
 Clause : LFSet A → 𝒰
 Clause Γ = List (Lit Γ)
+
+opaque
+  unfolding mapₛ
+  avoid-var-clause : ⦃ d : is-discrete A ⦄
+                     {v : A}
+                   → (c : Clause Γ)
+                   → v ∉ mapₛ unlit (LFSet.from-list c)
+                   → Clause (rem v Γ)
+  avoid-var-clause []      v∉ = []
+  avoid-var-clause (l ∷ c) v∉ =
+      avoid-lit-var l (fst $ ∉ₛ-uncons v∉)
+    ∷ avoid-var-clause c (snd $ ∉ₛ-uncons v∉)
+
+  avoid-ctx-clause : ⦃ d : is-discrete A ⦄
+                   → (f : Clause Γ)
+                   → {Δ : LFSet A}
+                   → mapₛ unlit (LFSet.from-list f) ∥ₛ Δ
+                   → Clause (minus Γ Δ)
+  avoid-ctx-clause []      d = []
+  avoid-ctx-clause (l ∷ f) d =
+      avoid-lit-ctx l (fst $ ∥ₛ-∷-l← d)
+    ∷ avoid-ctx-clause f (snd $ ∥ₛ-∷-l← d)
 
 CNF : LFSet A → 𝒰
 CNF Γ = List (Clause Γ)

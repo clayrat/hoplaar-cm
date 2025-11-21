@@ -63,6 +63,7 @@ open import ch2.Formula using (Var)
 open import ch2.Sem
 open import ch2.Appl
 open import ch2.Ix.Formula
+open import ch2.Ix.Lit
 open import ch2.Ix.NF
 open import ch2.Ix.CNF
 open import ch2.Ix.DP
@@ -132,21 +133,6 @@ trail-pvars-++ {tr1} {tr2} =
 count-guessed : Trail Γ → ℕ
 count-guessed = count (is-guessed? ∘ snd)
 
-polarize : Ctx → LFSet (Var × Bool)
-polarize Γ = mapₛ (_, true) Γ ∪∷ mapₛ (_, false) Γ
-
-size-polarize : sizeₛ (polarize Γ) ＝ sizeₛ Γ + sizeₛ Γ
-size-polarize =
-    size-∪∷-∥ₛ
-      (λ x∈t x∈f →
-          rec! (λ xt xt∈ xte →
-                 rec! (λ xf xf∈ xfe →
-                        false! (ap snd xte ⁻¹ ∙ ap snd xfe))
-                      (mapₛ-∈ x∈f))
-               (mapₛ-∈ x∈t))
-  ∙ ap² _+_ (size-map-inj (ap fst))
-            (size-map-inj (ap fst))
-
 -- TODO duplication but it's probably more hassle to fiddle with eliminators
 trail-pvars⊆ : {tr : Trail Γ} → trail-pvars tr ⊆ polarize Γ
 trail-pvars⊆ {Γ} {x = xl , false} x∈ =
@@ -156,24 +142,6 @@ trail-pvars⊆ {Γ} {x = xl , false} x∈ =
 trail-pvars⊆ {Γ} {x = xl , true}  x∈ =
   let (y , y∈ , ye) = List.map-∈Σ _ x∈ in
   ∈ₛ-∪∷←l (∈-mapₛ (subst (_∈ Γ) (ap fst ye ⁻¹) (unlit∈ y)))
-
--- TODO duplication again!
-lit-set⊆ : {l : LFSet (Lit Γ)} → mapₛ < unlit , positive > l ⊆ polarize Γ
-lit-set⊆ {Γ} {x = xl , false} x∈ =
-  rec! (λ y y∈ ye →
-           ∈ₛ-∪∷←r {s₁ = mapₛ (_, true) Γ}
-                   (∈-mapₛ (subst (_∈ Γ) (ap fst ye ⁻¹) (unlit∈ y))))
-    (mapₛ-∈ x∈)
-lit-set⊆ {Γ} {x = xl , true}  x∈ =
-  rec! (λ y y∈ ye →
-           ∈ₛ-∪∷←l (∈-mapₛ (subst (_∈ Γ) (ap fst ye ⁻¹) (unlit∈ y))))
-    (mapₛ-∈ x∈)
-
-lit-set-size : {l : LFSet (Lit Γ)} → sizeₛ l ≤ 2 · sizeₛ Γ
-lit-set-size {Γ} =
-    =→≤ (size-map-inj unlit-positive-inj ⁻¹)
-  ∙ size-⊆ lit-set⊆
-  ∙ =→≤ (size-polarize ∙ ap (sizeₛ Γ +_) (+-zero-r (sizeₛ Γ) ⁻¹))
 
 -- a proper trail mentions each literal once
 Trail-Inv : Trail Γ → 𝒰
@@ -196,7 +164,7 @@ trail-inv≤ {Γ} {tr} ti =
     =→≤ (  map-length ⁻¹ ∙ map-length ⁻¹
          ∙ size-unique ti ⁻¹
          ∙ ap sizeₛ (from-list-map {xs = trail-lits tr}) ⁻¹
-         ∙ size-map-inj unlit-positive-inj)
+         ∙ size-map-inj unpack-inj)
   ∙ lit-set-size
 
 backtrack : Trail Γ → Maybe (Lit Γ × Trail Γ)
@@ -222,7 +190,7 @@ Backtrack-suffix {Γ} tr (p , tr′) =
 opaque
   unfolding Suffix
   bsuffix→suffix : {tr tr' : Trail Γ} {p : Lit Γ}
-                          → Backtrack-suffix {Γ} tr (p , tr') → Suffix ((p , guessed) ∷ tr') tr
+                 → Backtrack-suffix {Γ} tr (p , tr') → Suffix ((p , guessed) ∷ tr') tr
   bsuffix→suffix (pr , _ , e) = (pr , e ⁻¹)
 
 backtrack-suffix : {tr : Trail Γ} → Allₘ (Backtrack-suffix tr) (backtrack tr)
@@ -480,7 +448,7 @@ unit-subpropagate-loop {x} ih {Γ} cls tr e ti ti2 =
         subst (λ q → Uniq (map < unlit , positive > q ++ trail-pvars tr)) (happly map-pres-comp newunits) $
         subst (λ q → Uniq (q ++ trail-pvars tr)) (happly map-pres-comp newunits) $
         uniq→++
-          (uniq-map unlit-positive-inj $
+          (uniq-map unpack-inj $
            nub-unique {R = λ _ _ → Lit-is-discrete .proof}
                       {xs = concat (filter (is-fresh-unit-clause tr) cls')})
           ti
@@ -492,7 +460,7 @@ unit-subpropagate-loop {x} ih {Γ} cls tr e ti ti2 =
                (fzs , _) = filter-∈ {p = is-fresh-unit-clause tr} {xs = cls'} zs∈
                (lz , zse , ll) = fresh-unit-clause-prop {c = zs} fzs
               in
-            ll (map-∈ _ unlit-positive-inj $
+            ll (map-∈ _ unpack-inj $
                 subst (_∈ trail-pvars tr)
                       (ze ∙ ap < unlit , positive > (any-¬there false! (subst (z ∈_) zse z∈')))
                       x∈tr)
@@ -591,7 +559,7 @@ dpli-loop-backtrack {Γ} {x} {y} ih tr ti ti2 rj ri ex ey p trr eb =
   uptr = udptr .snd .fst
   dtr = udptr .snd .snd
   ti'' : Trail-Inv ((negate p , deduced) ∷ trr)
-  ti'' = contra (map-∈ _ unlit-positive-inj)
+  ti'' = contra (map-∈ _ unpack-inj)
                 (λ np∈ → ti2 p (subst ((p , guessed) ∈_)
                                        etr
                                        (any-++-r (here refl)))
@@ -791,7 +759,7 @@ dpli-loop-guess {Γ} cls {x} {y} ih tr ti ti2 rj ri ex ey cls' tr' ti' ti2' us' 
   p∉ = pnp∉ .fst
   np∉ = pnp∉ .snd
   ti'' : Trail-Inv ((p , guessed) ∷ tr')
-  ti'' = contra (map-∈ _ unlit-positive-inj) p∉ ∷ᵘ ti'
+  ti'' = contra (map-∈ _ unpack-inj) p∉ ∷ᵘ ti'
   ti2'' : Trail-Inv2 ((p , guessed) ∷ tr')
   ti2'' z z∈ =
     [ (λ z=p' → subst (λ q → negate z ∉ tail-of z (q ∷ trail-lits tr'))

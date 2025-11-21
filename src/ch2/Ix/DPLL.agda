@@ -46,9 +46,10 @@ open import LFSet.Membership
 open import LFSet.Discrete as LFSet
 
 open import ch2.Formula using (Var)
-open import ch2.Sem
 open import ch2.Appl
 open import ch2.Ix.Formula
+-- open import ch2.Ix.Sem
+open import ch2.Ix.Lit
 open import ch2.Ix.NF
 open import ch2.Ix.CNF
 open import ch2.Ix.DP

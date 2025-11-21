@@ -48,6 +48,7 @@ open import ch2.Formula
 open import ch2.Sem
 open import ch2.Appl
 open import ch2.Ix.Formula
+open import ch2.Ix.Lit
 open import ch2.Ix.NF
 open import ch2.Ix.CNF
 
@@ -55,36 +56,6 @@ private variable
   A : 𝒰
   v : Var
   Γ : Ctx
-
--- no-ops propagating context strengthenings
-avoid-var : {v : Var} → (l : Lit Γ) → v ≠ unlit l → Lit (rem v Γ)
-avoid-var (Pos a m) ne = Pos a (rem-∈-≠ (ne ∘ _⁻¹) m)
-avoid-var (Neg a m) ne = Neg a (rem-∈-≠ (ne ∘ _⁻¹) m)
-
-avoid-ctx : (l : Lit Γ) → {Δ : Ctx} → unlit l ∉ Δ → Lit (minus Γ Δ)
-avoid-ctx (Pos a m) l∉ = Pos a (∈-minus m l∉)
-avoid-ctx (Neg a m) l∉ = Neg a (∈-minus m l∉)
-
-opaque
-  unfolding mapₛ
-  avoid-var-clause : {v : Var}
-                   → (c : Clause Γ)
-                   → v ∉ mapₛ unlit (LFSet.from-list c)
-                   → Clause (rem v Γ)
-  avoid-var-clause []      v∉ = []
-  avoid-var-clause (l ∷ c) v∉ =
-      avoid-var l (fst $ ∉ₛ-uncons v∉)
-    ∷ avoid-var-clause c (snd $ ∉ₛ-uncons v∉)
-
-  avoid-ctx-clause : (f : Clause Γ)
-                   → {Δ : Ctx}
-                   → mapₛ unlit (LFSet.from-list f) ∥ₛ Δ
-                   → Clause (minus Γ Δ)
-  avoid-ctx-clause []      d = []
-  avoid-ctx-clause (l ∷ f) d =
-      avoid-ctx l (fst $ ∥ₛ-∷-l← d)
-    ∷ avoid-ctx-clause f (snd $ ∥ₛ-∷-l← d)
-
 
 -- ==== 1-LITERAL RULE aka BCP aka UNIT PROPAGATION ====
 
@@ -119,7 +90,7 @@ delete-var v [] = []
 delete-var v (l ∷ c) =
   Dec.rec
     (λ _ → delete-var v c)
-    (λ ne → avoid-var l ne ∷ delete-var v c)
+    (λ ne → avoid-lit-var l ne ∷ delete-var v c)
     (v ≟ unlit l)
 
 -- TODO reformulate w/ Var ?
@@ -251,7 +222,7 @@ resolve-part l (c ∷ cl) =
          (λ n∉c →   p
                   , n
                   ,   map-with-∈ c
-                        (λ a a∈ → avoid-var a
+                        (λ a a∈ → avoid-lit-var a
                                     ([ (λ e → l∉c (subst (_∈ c) e a∈))
                                      , (λ e → n∉c (subst (_∈ c) e a∈))
                                      ]ᵤ ∘ unlit-eq ∘ _⁻¹))

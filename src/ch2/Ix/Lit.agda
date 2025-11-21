@@ -2,6 +2,7 @@
 module ch2.Ix.Lit where
 
 open import Prelude hiding (_≠_)
+open import Foundations.Sigma
 open import Meta.Effect hiding (_>>_ ; _>>=_)
 open import Meta.Show
 open import Logic.Discreteness
@@ -20,7 +21,7 @@ open import Data.Maybe as Maybe
 open import Data.Maybe.Correspondences.Unary.Any renaming (here to hereₘ)
 open import Data.List as List
 open import Data.List.Operations.Properties
-open import Data.List.Operations.Discrete
+open import Data.List.Operations.Discrete renaming (rem to remₗ)
 open import Data.List.Correspondences.Binary.OPE
 open import Data.List.Operations.Rel
 open import Data.Sum
@@ -43,37 +44,41 @@ private variable
 -- literals
 
 data Lit (Γ : LFSet A) : 𝒰 where
-  Pos : (a : A) → a ∈ Γ → Lit Γ
-  Neg : (a : A) → a ∈ Γ → Lit Γ
+  Pos : AVar Γ → Lit Γ
+  Neg : AVar Γ → Lit Γ
 
 unlit : {Γ : LFSet A}
       → Lit Γ → A
-unlit (Pos a _) = a
-unlit (Neg a _) = a
+unlit (Pos a) = unvar a
+unlit (Neg a) = unvar a
+
+lit→atomvar : Lit Γ → AVar Γ
+lit→atomvar (Pos a) = a
+lit→atomvar (Neg a) = a
 
 is-pos : Lit Γ → Type
-is-pos (Pos x _) = ⊤
-is-pos (Neg x _) = ⊥
+is-pos (Pos _) = ⊤
+is-pos (Neg _) = ⊥
 
-pos≠neg : {Γ : LFSet A} {x y : A} {mx : x ∈ Γ} {my : y ∈ Γ}
-        → Pos x mx ≠ Neg y my
+pos≠neg : {Γ : LFSet A} {x y : AVar Γ}
+        → Pos x ≠ Neg y
 pos≠neg p = subst is-pos p tt
 
 Lit-= : {Γ : LFSet A}
       → (A → A → Bool)
       → Lit Γ → Lit Γ → Bool
-Lit-= e (Pos x _) (Pos y _) = e x y
-Lit-= e (Pos x _) (Neg y _) = false
-Lit-= e (Neg x _) (Pos y _) = false
-Lit-= e (Neg x _) (Neg y _) = e x y
+Lit-= e (Pos x) (Pos y) = e (unvar x) (unvar y)
+Lit-= e (Pos x) (Neg y) = false
+Lit-= e (Neg x) (Pos y) = false
+Lit-= e (Neg x) (Neg y) = e (unvar x) (unvar y)
 
 Reflects-lit : {Γ : LFSet A} {e : A → A → Bool}
              → (∀ {x y} → Reflects (x ＝ y) (e x y))
              → ∀ {lx ly : Lit Γ} → Reflects (lx ＝ ly) (Lit-= e lx ly)
-Reflects-lit re {lx = Pos x mx} {ly = Pos y my} = Reflects.dmap (λ x → ap² Pos x (to-pathᴾ (hlevel 1 _ my))) (contra (ap unlit)) re
-Reflects-lit re {lx = Pos x mx} {ly = Neg y my} = ofⁿ pos≠neg
-Reflects-lit re {lx = Neg x mx} {ly = Pos y my} = ofⁿ (pos≠neg ∘ _⁻¹)
-Reflects-lit re {lx = Neg x mx} {ly = Neg y my} = Reflects.dmap (λ x → ap² Neg x (to-pathᴾ (hlevel 1 _ my))) (contra (ap unlit)) re
+Reflects-lit re {lx = Pos x} {ly = Pos y} = Reflects.dmap (ap Pos ∘ avar-ext) (contra (ap unlit)) re
+Reflects-lit re {lx = Pos x} {ly = Neg y} = ofⁿ pos≠neg
+Reflects-lit re {lx = Neg x} {ly = Pos y} = ofⁿ (pos≠neg ∘ _⁻¹)
+Reflects-lit re {lx = Neg x} {ly = Neg y} = Reflects.dmap (ap Neg ∘ avar-ext) (contra (ap unlit)) re
 
 instance
   Lit-is-discrete : {Γ : LFSet A} → ⦃ d : is-discrete A ⦄ → is-discrete (Lit Γ)
@@ -82,58 +87,67 @@ instance
 
   Show-lit : {Γ : LFSet A} → ⦃ s : Show A ⦄ → Show (Lit Γ)
   Show-lit = default-show λ where
-                              (Pos x _) → show x
-                              (Neg x _) → "¬" ++ₛ show x
+                              (Pos x) → show ⦃ r = Show-avar ⦄ x
+                              (Neg x) → "¬" ++ₛ show ⦃ r = Show-avar ⦄ x
 
 negative : Lit Γ → Bool
-negative (Neg _ _) = true
-negative  _        = false
+negative (Neg _) = true
+negative  _      = false
 
 positive : Lit Γ → Bool
 positive = not ∘ negative
 
 abs : Lit Γ → Lit Γ
-abs (Neg p mp) = Pos p mp
-abs (Pos p mp) = Pos p mp
+abs (Neg p) = Pos p
+abs (Pos p) = Pos p
 
 abs-idem : {l : Lit Γ}
          → abs (abs l) ＝ abs l
-abs-idem {l = Pos a m} = refl
-abs-idem {l = Neg a m} = refl
+abs-idem {l = Pos a} = refl
+abs-idem {l = Neg a} = refl
 
 negate : Lit Γ → Lit Γ
-negate (Neg p mp) = Pos p mp
-negate (Pos p mp) = Neg p mp
+negate (Neg p) = Pos p
+negate (Pos p) = Neg p
 
 abs-negate : {l : Lit Γ}
            → abs (negate l) ＝ abs l
-abs-negate {l = Pos a m} = refl
-abs-negate {l = Neg a m} = refl
+abs-negate {l = Pos a} = refl
+abs-negate {l = Neg a} = refl
 
 restrict : {Γ : LFSet A}
          → (l : Lit Γ) → Lit (sng (unlit l))
-restrict (Pos a _) = Pos a (hereₛ refl)
-restrict (Neg a _) = Neg a (hereₛ refl)
+restrict (Pos a) = Pos (restrict-avar a)
+restrict (Neg a) = Neg (restrict-avar a)
 
 wk-lit : {Γ Δ : LFSet A} → Γ ⊆ Δ → Lit Γ → Lit Δ
-wk-lit f (Pos a m) = Pos a (f m)
-wk-lit f (Neg a m) = Neg a (f m)
+wk-lit s (Pos a) = Pos (wk-avar s a)
+wk-lit s (Neg a) = Neg (wk-avar s a)
 
 wk-lit-inj : {Γ Δ : LFSet A} {s : Γ ⊆ Δ}
            → Injective (wk-lit s)
-wk-lit-inj {s = s} {x = Pos a x} {y = Pos b y} e =
-  ap² Pos (ap unlit e) (to-pathᴾ (hlevel 1 _ y))
-wk-lit-inj {s = s} {x = Pos a x} {y = Neg b y} e =
+wk-lit-inj {x = Pos a} {y = Pos b} e =
+  ap Pos (avar-ext (ap unlit e))
+wk-lit-inj {x = Pos a} {y = Neg b} e =
   absurd (pos≠neg e)
-wk-lit-inj {s = s} {x = Neg a x} {y = Pos b y} e =
+wk-lit-inj {x = Neg a} {y = Pos b} e =
   absurd (pos≠neg (e ⁻¹))
-wk-lit-inj {s = s} {x = Neg a x} {y = Neg b y} e =
-  ap² Neg (ap unlit e) (to-pathᴾ (hlevel 1 _ y))
+wk-lit-inj {x = Neg a} {y = Neg b} e =
+  ap Neg (avar-ext (ap unlit e))
+
+-- no-ops propagating context strengthenings
+avoid-lit-var : ⦃ d : is-discrete A ⦄ → {v : A} → (l : Lit Γ) → v ≠ unlit l → Lit (rem v Γ)
+avoid-lit-var (Pos a) ne = Pos (avoid-var a ne)
+avoid-lit-var (Neg a) ne = Neg (avoid-var a ne)
+
+avoid-lit-ctx : ⦃ d : is-discrete A ⦄ → (l : Lit Γ) → {Δ : LFSet A} → unlit l ∉ Δ → Lit (minus Γ Δ)
+avoid-lit-ctx (Pos a) l∉ = Pos (avoid-ctx a l∉)
+avoid-lit-ctx (Neg a) l∉ = Neg (avoid-ctx a l∉)
 
 negate-invol : {l : Lit Γ}
              → negate (negate l) ＝ l
-negate-invol {l = Pos a m} = refl
-negate-invol {l = Neg a m} = refl
+negate-invol {l = Pos a} = refl
+negate-invol {l = Neg a} = refl
 
 negate-swap : {l m : Lit Γ}
             → l ＝ negate m
@@ -142,8 +156,8 @@ negate-swap e = negate-invol ⁻¹ ∙ ap negate (e ⁻¹)
 
 negative-negate : {l : Lit Γ}
                 → negative (negate l) ＝ positive l
-negative-negate {l = Pos a x} = refl
-negative-negate {l = Neg a x} = refl
+negative-negate {l = Pos a} = refl
+negative-negate {l = Neg a} = refl
 
 -- TODO should probably generalized to involutive→injective (or embedding?)
 negate-inj : {Γ : LFSet A}
@@ -153,42 +167,48 @@ negate-inj {x} {y} e = negate-invol {l = x} ⁻¹ ∙ ap negate e ∙ negate-inv
 unlit-eq : {Γ : LFSet A} {x y : Lit Γ}
          → unlit x ＝ unlit y
          → (x ＝ y) ⊎ (x ＝ negate y)
-unlit-eq {x = Pos a x} {y = Pos b y} e =
-  inl (ap² Pos e (to-pathᴾ (hlevel 1 _ y)))
-unlit-eq {x = Pos a x} {y = Neg b y} e =
-  inr (ap² Pos e (to-pathᴾ (hlevel 1 _ y)))
-unlit-eq {x = Neg a x} {y = Pos b y} e =
-  inr (ap² Neg e (to-pathᴾ (hlevel 1 _ y)))
-unlit-eq {x = Neg a x} {y = Neg b y} e =
-  inl (ap² Neg e (to-pathᴾ (hlevel 1 _ y)))
+unlit-eq {x = Pos a} {y = Pos b} e =
+  inl (ap Pos (avar-ext e))
+unlit-eq {x = Pos a} {y = Neg b} e =
+  inr (ap Pos (avar-ext e))
+unlit-eq {x = Neg a} {y = Pos b} e =
+  inr (ap Neg (avar-ext e))
+unlit-eq {x = Neg a} {y = Neg b} e =
+  inl (ap Neg (avar-ext e))
 
 unlit-negate : {Γ : LFSet A} {x : Lit Γ}
              → unlit x ＝ unlit (negate x)
-unlit-negate {x = Pos a x} = refl
-unlit-negate {x = Neg a x} = refl
+unlit-negate {x = Pos a} = refl
+unlit-negate {x = Neg a} = refl
 
 unpack : {Γ : LFSet A} → Lit Γ → A × Bool
 unpack = < unlit , positive >
 
 unpack-inj : {Γ : LFSet A}
            → Injective (unpack {Γ = Γ})
-unpack-inj {x = Pos a x} {y = Pos b y} e =
-  ap² Pos (ap fst e) (to-pathᴾ (hlevel 1 _ y))
-unpack-inj {x = Pos a x} {y = Neg b y} e =
+unpack-inj {x = Pos a} {y = Pos b} e =
+  ap Pos (avar-ext (ap fst e))
+unpack-inj {x = Pos a} {y = Neg b} e =
   false! (ap snd e)
-unpack-inj {x = Neg a x} {y = Pos b y} e =
+unpack-inj {x = Neg a} {y = Pos b} e =
   false! (ap snd e)
-unpack-inj {x = Neg a x} {y = Neg b y} e =
-  ap² Neg (ap fst e) (to-pathᴾ (hlevel 1 _ y))
+unpack-inj {x = Neg a} {y = Neg b} e =
+  ap Neg (avar-ext (ap fst e))
 
 unlit∈ : (l : Lit Γ) → unlit l ∈ Γ
-unlit∈ (Pos a m) = m
-unlit∈ (Neg a m) = m
+unlit∈ (Pos a) = unvar∈ a
+unlit∈ (Neg a) = unvar∈ a
 
 lit→form : {Γ : LFSet A}
          → Lit Γ → Formulaᵢ Γ
-lit→form (Pos a m) = Atom a m
-lit→form (Neg a m) = Not (Atom a m)
+lit→form (Pos a) = Atom a
+lit→form (Neg a) = Not (Atom a)
+
+wk-lit-form : {Γ Δ : LFSet A} {s : Γ ⊆ Δ}
+            → (l : Lit Γ)
+            → lit→form (wk-lit s l) ＝ wk s (lit→form l)
+wk-lit-form {s} (Pos a) = refl
+wk-lit-form {s} (Neg a) = refl
 
 -- applies to both Clauses and Conjuncts
 nontrivial? : {Γ : LFSet A}
@@ -303,10 +323,10 @@ lit-set-size {Γ} =
 lit-< : {Γ : LFSet A}
       → (A → A → Bool)
       → Lit Γ → Lit Γ → Bool
-lit-< ord (Pos v1 _) (Pos v2 _) = ord v1 v2
-lit-< _   (Pos _ _ ) (Neg _ _)  = true
-lit-< _   (Neg _ _)  (Pos _ _)  = false
-lit-< ord (Neg v1 _) (Neg v2 _) = ord v1 v2
+lit-< ord (Pos v1) (Pos v2) = ord (unvar v1) (unvar v2)
+lit-< _   (Pos _ ) (Neg _)  = true
+lit-< _   (Neg _ ) (Pos _)  = false
+lit-< ord (Neg v1) (Neg v2) = ord (unvar v1) (unvar v2)
 
 -- extended literals
 
@@ -335,6 +355,11 @@ elit≠efalse p = subst is-elit p tt
 
 etrue≠efalse : etrue {Γ = Γ} ≠ efalse
 etrue≠efalse p = subst is-etrue p tt
+
+elit-inj : {l1 l2 : Lit Γ}
+         → elit l1 ＝ elit l2
+         → l1 ＝ l2
+elit-inj = just-inj ∘ ap unelit
 
 elit-= : {Γ : LFSet A}
        → (A → A → Bool)
@@ -411,6 +436,24 @@ unelit-negative : {y : Lit Γ} {x : ELit Γ}
                 → y ∈ unelit x
                 → negative y ＝ enegative x
 unelit-negative {x = elit x} = ap negative ∘ unhere
+
+wk-elit : {Γ Δ : LFSet A} → Γ ⊆ Δ → ELit Γ → ELit Δ
+wk-elit s (elit l) = elit $ wk-lit s l
+wk-elit s  etrue   = etrue
+wk-elit s  efalse  = efalse
+
+wk-elit-inj : {Γ Δ : LFSet A} {s : Γ ⊆ Δ}
+            → Injective (wk-elit s)
+wk-elit-inj {x = elit x} {y = elit y} e =
+  ap elit (wk-lit-inj (elit-inj e))
+wk-elit-inj {x = elit x} {y = etrue}  e = absurd (elit≠etrue e)
+wk-elit-inj {x = elit x} {y = efalse} e = absurd (elit≠efalse e)
+wk-elit-inj {x = etrue}  {y = elit x} e = absurd (elit≠etrue (e ⁻¹))
+wk-elit-inj {x = etrue}  {y = etrue}  e = refl
+wk-elit-inj {x = etrue}  {y = efalse} e = absurd (etrue≠efalse e)
+wk-elit-inj {x = efalse} {y = elit x} e = absurd (elit≠efalse (e ⁻¹))
+wk-elit-inj {x = efalse} {y = etrue}  e = absurd (etrue≠efalse (e ⁻¹))
+wk-elit-inj {x = efalse} {y = efalse} e = refl
 
 -- TODO generalize, move to cm somewhere
 first-inj : {f : A → B} {C : 𝒰}
@@ -496,3 +539,125 @@ elit-< _  etrue     efalse   = true
 elit-< _  efalse   (elit _)  = true
 elit-< _  efalse    etrue    = false
 elit-< _  efalse    efalse   = false
+
+-- duplets & triplets
+
+data Duplet (Γ : LFSet A) : 𝒰 where
+  duand : ELit Γ → ELit Γ → Duplet Γ
+  duor  : ELit Γ → ELit Γ → Duplet Γ
+  -- we never get this
+--  duimp : ELit Γ → ELit Γ → Duplet Γ
+  duiff : ELit Γ → ELit Γ → Duplet Γ
+
+is-duand : Duplet Γ → 𝒰
+is-duand (duand _ _) = ⊤
+is-duand  _         = ⊥
+
+is-duor : Duplet Γ → 𝒰
+is-duor (duor _ _) = ⊤
+is-duor  _        = ⊥
+
+duand≠duor : {p q r s : ELit Γ} → duand p q ≠ duor r s
+duand≠duor e = subst is-duand e tt
+
+duand≠duiff : {p q r s : ELit Γ} → duand p q ≠ duiff r s
+duand≠duiff e = subst is-duand e tt
+
+duor≠duiff : {p q r s : ELit Γ} → duor p q ≠ duiff r s
+duor≠duiff e = subst is-duor e tt
+
+unduplet : Duplet Γ → ELit Γ × ELit Γ
+unduplet (duand p q) = p , q
+unduplet (duor  p q) = p , q
+unduplet (duiff p q) = p , q
+
+duand-inj : {p1 q1 p2 q2 : ELit Γ}
+           → duand p1 q1 ＝ duand p2 q2
+           → (p1 ＝ p2) × (q1 ＝ q2)
+duand-inj = ×-path-inv ∘ ap unduplet
+
+duor-inj : {p1 q1 p2 q2 : ELit Γ}
+         → duor p1 q1 ＝ duor p2 q2
+         → (p1 ＝ p2) × (q1 ＝ q2)
+duor-inj = ×-path-inv ∘ ap unduplet
+
+duiff-inj : {p1 q1 p2 q2 : ELit Γ}
+           → duiff p1 q1 ＝ duiff p2 q2
+           → (p1 ＝ p2) × (q1 ＝ q2)
+duiff-inj = ×-path-inv ∘ ap unduplet
+
+Duplet-= : {Γ : LFSet A}
+         → (A → A → Bool)
+         → Duplet Γ → Duplet Γ → Bool
+Duplet-= e (duand p1 q1) (duand p2 q2) = elit-= e p1 p2 and elit-= e q1 q2
+Duplet-= e (duor  p1 q1) (duor  p2 q2) = elit-= e p1 p2 and elit-= e q1 q2
+Duplet-= e (duiff p1 q1) (duiff p2 q2) = elit-= e p1 p2 and elit-= e q1 q2
+Duplet-= e _              _              = false
+
+Reflects-duplet : {Γ : LFSet A} {e : A → A → Bool}
+                → ⦃ r : ∀ {x y} → Reflects (x ＝ y) (e x y) ⦄
+                → ∀ {d1 d2} → Reflects (d1 ＝ d2) (Duplet-= {Γ = Γ} e d1 d2)
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duand p1 q1} {d2 = duand p2 q2} =
+  Reflects.dmap ((λ e → ap² duand e) $²_) (contra (×-path-inv ∘ ap unduplet))
+    (Reflects-× ⦃ rp = Reflects-elit r ⦄ ⦃ rq = Reflects-elit r ⦄)
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duand p1 q1} {d2 = duor p2 q2} =
+  ofⁿ duand≠duor
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duand p1 q1} {d2 = duiff p2 q2} =
+  ofⁿ duand≠duiff
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duor p1 q1} {d2 = duand p2 q2} =
+  ofⁿ (duand≠duor ∘ _⁻¹)
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duor p1 q1} {d2 = duor p2 q2} =
+  Reflects.dmap ((λ e → ap² duor e) $²_) (contra (×-path-inv ∘ ap unduplet))
+    (Reflects-× ⦃ rp = Reflects-elit r ⦄ ⦃ rq = Reflects-elit r ⦄)
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duor p1 q1} {d2 = duiff p2 q2} =
+  ofⁿ duor≠duiff
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duiff p1 q1} {d2 = duand p2 q2} =
+  ofⁿ (duand≠duiff ∘ _⁻¹)
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duiff p1 q1} {d2 = duor p2 q2} =
+  ofⁿ (duor≠duiff ∘ _⁻¹)
+Reflects-duplet {e} ⦃ r ⦄ {d1 = duiff p1 q1} {d2 = duiff p2 q2} =
+  Reflects.dmap ((λ e → ap² duiff e) $²_) (contra (×-path-inv ∘ ap unduplet))
+    (Reflects-× ⦃ rp = Reflects-elit r ⦄ ⦃ rq = Reflects-elit r ⦄)
+
+instance
+  Duplet-discrete : ⦃ d : is-discrete A ⦄ {Γ : LFSet A}
+                  → is-discrete (Duplet Γ)
+  Duplet-discrete ⦃ d ⦄ {x} {y} .does  = Duplet-= (λ x y → d .does) x y
+  Duplet-discrete ⦃ d ⦄ {x} {y} .proof = Reflects-duplet
+
+wk-duplet : {Γ Δ : LFSet A} → Γ ⊆ Δ → Duplet Γ → Duplet Δ
+wk-duplet s (duand x y) = duand (wk-elit s x) (wk-elit s y)
+wk-duplet s (duor x y)  = duor (wk-elit s x) (wk-elit s y)
+wk-duplet s (duiff x y) = duiff (wk-elit s x) (wk-elit s y)
+
+wk-duplet-inj : {Γ Δ : LFSet A} {s : Γ ⊆ Δ}
+              → Injective (wk-duplet s)
+wk-duplet-inj {x = duand xa xb} {y = duand ya yb} e =
+  let (ex , ey) = duand-inj e in
+  ap² duand (wk-elit-inj ex) (wk-elit-inj ey)
+wk-duplet-inj {x = duand xa xb} {y = duor ya yb}  e = absurd (duand≠duor e)
+wk-duplet-inj {x = duand xa xb} {y = duiff ya yb} e = absurd (duand≠duiff e)
+wk-duplet-inj {x = duor xa xb}  {y = duand ya yb} e = absurd (duand≠duor (e ⁻¹))
+wk-duplet-inj {x = duor xa xb}  {y = duor ya yb}  e =
+  let (ex , ey) = duor-inj e in
+  ap² duor (wk-elit-inj ex) (wk-elit-inj ey)
+wk-duplet-inj {x = duor xa xb}  {y = duiff ya yb} e = absurd (duor≠duiff e)
+wk-duplet-inj {x = duiff xa xb} {y = duand ya yb} e = absurd (duand≠duiff (e ⁻¹))
+wk-duplet-inj {x = duiff xa xb} {y = duor ya yb}  e = absurd (duor≠duiff (e ⁻¹))
+wk-duplet-inj {x = duiff xa xb} {y = duiff ya yb} e =
+  let (ex , ey) = duiff-inj e in
+  ap² duiff (wk-elit-inj ex) (wk-elit-inj ey)
+
+duplet→form : Duplet Γ → Formulaᵢ Γ
+duplet→form (duand a b) = And (elit→form a) (elit→form b)
+duplet→form (duor a b)  = Or (elit→form a) (elit→form b)
+duplet→form (duiff a b) = Iff (elit→form a) (elit→form b)
+
+Triplet : LFSet A → 𝒰
+Triplet {A} Γ = AVar Γ × Duplet Γ
+
+tripatoms : {Γ : LFSet A}
+          → Triplet Γ → List A  -- AVar  ?
+tripatoms (av v _ , d) =
+  let (l , r) = unduplet d in
+  v ∷ Maybe.rec [] ((_∷ []) ∘ unlit) (unelit l) ++ Maybe.rec [] ((_∷ []) ∘ unlit) (unelit r)
