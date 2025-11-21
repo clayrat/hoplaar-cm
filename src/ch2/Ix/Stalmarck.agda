@@ -21,6 +21,7 @@ open import Data.Maybe.Correspondences.Unary.All renaming (All to Allₘ)
 open import Data.List as List
 open import Data.List.Operations.Discrete
 open import Data.String
+open import Data.Sum
 
 open import Order.Diagram.Meet
 open import Order.Constructions.Minmax
@@ -34,7 +35,7 @@ open import LFSet
 open import LFSet.Membership
 open import LFSet.Discrete
 
-open import Induction.Nat.Strong as Box using (□_)
+open import Induction.Nat.Lex as Box× using (□×_)
 
 open import KVListU
 open import KVMapU
@@ -47,6 +48,7 @@ open import ch2.Ix.Sem
 open import ch2.Ix.Lit
 open import ch2.Ix.NF
 open import ch2.Ix.CNF
+open import ch2.Ix.EClass
 -- open import ch2.Appl
 
 private variable
@@ -58,35 +60,6 @@ open KVOps
 open KVOps2
 open KVProp
 
--- equational classes
-
-EClass : ⦃ d : is-discrete A ⦄ → LFSet A → 𝒰
-EClass Γ = Partition (ELit Γ)
-
-ec-nonterminals≤ : ⦃ d : is-discrete A ⦄ {Γ : LFSet A}
-                 → {ec : EClass Γ}
-                 → nonterminals ec ≤ 2 + 2 · sizeₛ Γ
-ec-nonterminals≤ {Γ} {ec} =
-    nonterm≤ {p = ec}
-  ∙ =→≤ (size-unique (ec .pg .inv) ⁻¹)
-  ∙ elit-set-size {l = from-list (equated ec)}
-
-ecpartitions : ⦃ d : is-discrete A ⦄ {Γ : LFSet A}
-             → EClass Γ → ℕ
-ecpartitions {Γ} ec =
-  2 + 2 · sizeₛ Γ ∸ nonterminals ec
-
-equate-ecpartitions : ⦃ d : is-discrete A ⦄ {Γ : LFSet A}
-                    → {ec : EClass Γ} {a b : ELit Γ}
-                    → ⌞ not (equivalent ec a b) ⌟
-                    → ecpartitions (equate a b ec) < ecpartitions ec
-equate-ecpartitions {Γ} {ec} {a} {b} neq =
-  <-∸-2l-≃ {m = 2 + 2 · sizeₛ Γ}
-           {n = nonterminals (equate a b ec)}
-           {p = nonterminals ec}
-    (ec-nonterminals≤ {ec = equate a b ec}) ⁻¹ $
-  (equate-nonterminals {p = ec} neq)
-
 -- triplication
 
 triplicate : Formulaᵢ Γ → Σ[ Δ ꞉ Ctx ] (ELit (Δ ∪∷ Γ) × List (Triplet (Δ ∪∷ Γ)))
@@ -97,33 +70,7 @@ triplicate {Γ} fm =
     in
   Δ , l , valsm defs
 
--- equivalences
-
-Eqv : LFSet A → 𝒰
-Eqv Γ = ELit Γ × ELit Γ
-
-instance
-  Show-eqv : {Γ : LFSet A} → ⦃ s : Show A ⦄ → Show (Eqv Γ)
-  Show-eqv = default-show λ where
-                              (p , q) → show p ++ₛ "<=>" ++ₛ show q
-
 -- simple rules
-
-align-pol : Eqv Γ → Eqv Γ
-align-pol (p , q) =
-  if enegative? p
-    then enegate p , enegate q
-    else p , q
-
-align : Eqv Γ → Eqv Γ
-align (p , q) =
-  if elit-< _<str?_ (eabs p) (eabs q)
-    then align-pol (q , p)
-    else align-pol (p , q)
-
-equate2 : ⦃ d : is-discrete A ⦄ {Γ : LFSet A}
-        → Eqv Γ → EClass Γ → EClass Γ
-equate2 (p , q) = equate (enegate p) (enegate q) ∘ equate p q
 
 irredundant : ⦃ d : is-discrete A ⦄ {Γ : LFSet A}
             → EClass Γ → List (Eqv Γ) → List (Eqv Γ)
@@ -148,6 +95,7 @@ consequences {A} {Γ} (p , q) fm eqs =
 Trigger : LFSet A → 𝒰
 Trigger Γ = Eqv Γ × List (Eqv Γ)
 
+{-
 instance
   Show-trigger : {Γ : LFSet A} → ⦃ s : Show A ⦄ → Show (Trigger Γ)
   Show-trigger =
@@ -262,6 +210,25 @@ relevance {Γ} trigs =
 Erf : ⦃ d : is-discrete A ⦄ → LFSet A → 𝒰
 Erf Γ = EClass Γ × TrigMap Γ
 
+equatecons-neq : Eqv Γ → Eqv Γ → Erf Γ → EClass Γ → List (Eqv Γ) × TrigMap Γ
+equatecons-neq (p0 , q0) (p , q) erf@(eqv , rfn) eqv' =
+  let p' = canonize eqv (enegate p0)
+      q' = canonize eqv (enegate q0)
+      sp-pos = look rfn p
+      sp-neg = look rfn p'
+      sq-pos = look rfn q
+      sq-neg = look rfn q'
+      rfn' = insertm (canonize eqv' p)  (union sp-pos sq-pos) $
+             insertm (canonize eqv' p') (union sp-neg sq-neg) rfn
+      nw = union (intersect sp-pos sq-pos) (intersect sp-neg sq-neg)
+    in
+  (List.rec [] (union ∘ snd) nw , rfn')
+
+equatecons-post : Erf Γ → List (Eqv Γ) × Erf Γ → 𝒰
+equatecons-post erf0 (nw , erf) =
+    (nw ＝ []) × (erf ＝ erf0) 
+  ⊎ (ecpartitions (erf .fst) < ecpartitions (erf0 .fst)) 
+
 equatecons : Eqv Γ → Erf Γ → List (Eqv Γ) × Erf Γ
 equatecons (p0 , q0) erf@(eqv , rfn) =
   let p = canonize eqv p0
@@ -270,15 +237,36 @@ equatecons (p0 , q0) erf@(eqv , rfn) =
   if p =? q
     then [] , erf
     else
-      let p' = canonize eqv (enegate p0)
-          q' = canonize eqv (enegate q0)
-          eqv' = equate2 (p , q) eqv
-          sp-pos = look rfn p
-          sp-neg = look rfn p'
-          sq-pos = look rfn q
-          sq-neg = look rfn q'
-          rfn' = insertm (canonize eqv' p)  (union sp-pos sq-pos) $
-                 insertm (canonize eqv' p') (union sp-neg sq-neg) rfn
-          nw = union (intersect sp-pos sq-pos) (intersect sp-neg sq-neg)
+      let eqv' = equate2 (p , q) eqv
+          (nw' , rfn') = equatecons-neq (p0 , q0) (p , q) erf eqv'
         in
-      (List.rec [] (union ∘ snd) nw) , (eqv' , rfn')
+      (nw' , (eqv' , rfn'))
+
+ZSAT-ty : ℕ × ℕ → 𝒰
+ZSAT-ty (x , y) =
+    {Γ : Ctx}
+  → (erf : Erf Γ)
+  → (eqs : List (Eqv Γ))
+  → x ＝ ecpartitions (erf .fst)
+  → y ＝ length eqs
+  → Erf Γ
+-}
+{-
+zero-saturate-loop : ∀[ □× ZSAT-ty ⇒ ZSAT-ty ]
+zero-saturate-loop ih {Γ} erf []       _  _  = erf
+zero-saturate-loop ih {Γ} erf (pq ∷ a) ex ey =
+  let ns , erf' = equatecons pq erf in
+  Box×.call ih
+    {!!}
+    erf'
+    (union a ns)
+    refl
+    refl
+-}
+{-
+zero-saturate : Erf → List (Eqv Var) → Erf
+zero-saturate erf [] = erf
+zero-saturate erf (pq ∷ a) =
+  let ns , erf' = equatecons pq erf in
+  zero-saturate erf' (union a ns)
+-}

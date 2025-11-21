@@ -397,6 +397,25 @@ canonize-terminal : ⦃ d : is-discrete A ⦄
                   → is-terminus-opt (p .pg) (canonize p a)
 canonize-terminal {p} {a} = fst $ snd $ terminus p a
 
+equate-nonterminals-eq : ⦃ d : is-discrete A ⦄ 
+                       → {p : Partition A} {a b : A}
+                       → ⌞ equivalent p a b ⌟
+                       → nonterminals p ＝ nonterminals (equate a b p)
+equate-nonterminals-eq ⦃ d ⦄ {p} {a} {b} eq =
+   given-yes_return_then_
+     ⦃ A-pr = H-Level-Pathᴾ ⦃ H-Level-hedberg ⦃ di = d ⦄ ⦄ ⦄
+     (so→true! eq)
+     (λ q → nonterminals p ＝ nonterminals (Dec.rec (λ _ → p)
+                                                    (λ ne → equate-neq (canonize p a)
+                                                                       (canonize p b)
+                                                                       ne
+                                                                       (partition-size p a)
+                                                                       (partition-size p b)
+                                                                       p)
+                                                    q))
+   
+     refl
+
 -- TODO next 3 are messy / lotta copypaste
 lookup-link-implies : ⦃ d : is-discrete A ⦄ 
                     → {p : Partition A} {a b : A} {k : ℕ}
@@ -543,39 +562,49 @@ join-nonterminals ⦃ d ⦄ {p} {a} {b} {k} ne at bt =
              ∙ ap (count is-nonterminal?)
                   (values-lookup (Is-kvlist-upsert (Is-kvlist-upsert (p .pg .inv)))) ⁻¹)))
 
-equate-nonterminals : ⦃ d : is-discrete A ⦄ 
-                    → {p : Partition A} {a b : A}
-                    → ⌞ not (equivalent p a b) ⌟
-                    → nonterminals p < nonterminals (equate a b p)
-equate-nonterminals {p} {a} {b} neq =
-  given-no so→false! neq
-     return (λ q → nonterminals p < nonterminals (Dec.rec (λ _ → p)
-                                                    (λ ne → equate-neq (canonize p a)
-                                                                       (canonize p b)
-                                                                       ne
-                                                                       (partition-size p a)
-                                                                       (partition-size p b)
-                                                                       p)
-                                                    q))
-     then
-       the (nonterminals p < nonterminals (equate-neq (canonize p a)
-                                                      (canonize p b)
-                                                      (so→false! neq)
-                                                      (partition-size p a)
-                                                      (partition-size p b)
-                                                      p)) 
-       (Dec.elim
-         {C = λ q → nonterminals p < nonterminals (if ⌊ q ⌋
-                                                    then join (canonize p a) (canonize p b) (so→false! neq)
-                                                              (partition-size p a + partition-size p b) p
-                                                    else join (canonize p b) (canonize p a) (so→false! neq ∘ _⁻¹)
-                                                              (partition-size p a + partition-size p b) p)}
-         (λ pa≤pb → join-nonterminals {p = p} {k = partition-size p a + partition-size p b}
-                      (so→false! neq)
-                      (canonize-terminal {p = p} {a = a})
-                      (canonize-terminal {p = p} {a = b}))
-         (λ pb<pa → join-nonterminals {p = p} {k = partition-size p a + partition-size p b}
-                      (so→false! neq ∘ _⁻¹)
-                      (canonize-terminal {p = p} {a = b})
-                      (canonize-terminal {p = p} {a = a}))
-         (≤-dec {x = partition-size p a} {x = partition-size p b}))
+opaque
+  equate-nonterminals-neq : ⦃ d : is-discrete A ⦄ 
+                          → {p : Partition A} {a b : A}
+                          → ⌞ not (equivalent p a b) ⌟
+                          → nonterminals p < nonterminals (equate a b p)
+  equate-nonterminals-neq {p} {a} {b} neq =
+    given-no so→false! neq
+       return (λ q → nonterminals p < nonterminals (Dec.rec (λ _ → p)
+                                                      (λ ne → equate-neq (canonize p a)
+                                                                         (canonize p b)
+                                                                         ne
+                                                                         (partition-size p a)
+                                                                         (partition-size p b)
+                                                                         p)
+                                                      q))
+       then
+         the (nonterminals p < nonterminals (equate-neq (canonize p a)
+                                                        (canonize p b)
+                                                        (so→false! neq)
+                                                        (partition-size p a)
+                                                        (partition-size p b)
+                                                        p)) 
+         (Dec.elim
+           {C = λ q → nonterminals p < nonterminals (if ⌊ q ⌋
+                                                      then join (canonize p a) (canonize p b) (so→false! neq)
+                                                                (partition-size p a + partition-size p b) p
+                                                      else join (canonize p b) (canonize p a) (so→false! neq ∘ _⁻¹)
+                                                                (partition-size p a + partition-size p b) p)}
+           (λ pa≤pb → join-nonterminals {p = p} {k = partition-size p a + partition-size p b}
+                        (so→false! neq)
+                        (canonize-terminal {p = p} {a = a})
+                        (canonize-terminal {p = p} {a = b}))
+           (λ pb<pa → join-nonterminals {p = p} {k = partition-size p a + partition-size p b}
+                        (so→false! neq ∘ _⁻¹)
+                        (canonize-terminal {p = p} {a = b})
+                        (canonize-terminal {p = p} {a = a}))
+           (≤-dec {x = partition-size p a} {x = partition-size p b}))
+
+  equate-nonterminals : ⦃ d : is-discrete A ⦄ 
+                      → {p : Partition A} {a b : A}
+                      → nonterminals p ≤ nonterminals (equate a b p)
+  equate-nonterminals {p} {a} {b} =
+    Dec.rec
+      (=→≤ ∘ equate-nonterminals-eq {p = p})
+      (<-weaken _ _ ∘ equate-nonterminals-neq {p = p} ∘ not-so)
+      (Dec-So {b = equivalent p a b})
