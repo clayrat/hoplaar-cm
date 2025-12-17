@@ -230,20 +230,17 @@ backtrack-suffix {tr = (p , deduced) ∷ tr} =
                       , ap ((p , deduced) ∷_) e) $
   backtrack-suffix {tr = tr}
 
--- TODO use maybe membership everywhere
-backtrack-suffix-eq : {tr tr' : Trail Γ} {p : Lit Γ}
-                    → backtrack tr ＝ just (p , tr')
-                    → Backtrack-suffix tr (p , tr')
-backtrack-suffix-eq {tr} eb =
-  all-unjust $
-  subst (λ q → Allₘ (Backtrack-suffix tr) q)
-        eb $
-  backtrack-suffix {tr = tr}
+backtrack-suffix-∈ : {tr tr' : Trail Γ} {p : Lit Γ}
+                   → (p , tr') ∈ backtrack tr
+                   → Backtrack-suffix tr (p , tr')
+backtrack-suffix-∈ {tr} mb =
+  Maybe.All→∀∈ (backtrack-suffix {tr = tr}) _ mb
 
-eq-backtrack-suffix : {tr tr' : Trail Γ} {p : Lit Γ}
-                    → Backtrack-suffix tr (p , tr')
-                    → backtrack tr ＝ just (p , tr')
-eq-backtrack-suffix (pr , a , e) = ap backtrack e ∙ backtrack-++-l a
+∈-backtrack-suffix : {tr tr' : Trail Γ} {p : Lit Γ}
+                   → Backtrack-suffix tr (p , tr')
+                   → (p , tr') ∈ backtrack tr
+∈-backtrack-suffix (pr , a , e) =
+  =just→∈ (ap backtrack e ∙ backtrack-++-l a)
 
 bnone→count-guessed : {tr : Trail Γ}
                     → backtrack tr ＝ nothing
@@ -603,13 +600,12 @@ drop-guessed-suffix : ∀ {tr : Trail Γ} {n}
                     → Suffix (drop-guessed tr n) tr
 drop-guessed-suffix      {n = zero}  =
   suffix-refl
-drop-guessed-suffix {tr} {n = suc n} with backtrack tr | recall backtrack tr
-... | just (p , tr0) | ⟪ eq ⟫ =
+drop-guessed-suffix {tr} {n = suc n} with backtrack tr | backtrack-suffix {tr = tr}
+... | just (p , tr0) | m =
   suffix-trans
     (drop-guessed-suffix {n = n})
-    (suffix-uncons $ bsuffix→suffix $ backtrack-suffix-eq {tr = tr} eq)
-... | nothing        | ⟪ eq ⟫ =
-  []-suffix
+    (suffix-uncons $ bsuffix→suffix $ all-unjust m)
+... | nothing        | _ = []-suffix
 
 cg-drop-guessed : ∀ {n} {tr : Trail Γ}
                 → count-guessed (drop-guessed tr n) ＝ count-guessed tr ∸ n
@@ -618,7 +614,7 @@ cg-drop-guessed {n = suc n} {tr} with backtrack tr | recall backtrack tr
 ... | just (p , tr0) | ⟪ eq ⟫ =
     cg-drop-guessed {n = n}
   ∙ ap (_∸ suc n)
-       (bsuffix→count-guessed $ backtrack-suffix-eq {tr = tr} eq) ⁻¹
+       (bsuffix→count-guessed $ backtrack-suffix-∈ {tr = tr} $ =just→∈ eq) ⁻¹
 ... | nothing        | ⟪ eq ⟫ =
   ap (_∸ suc n)
      (bnone→count-guessed {tr = tr} eq) ⁻¹
@@ -627,7 +623,8 @@ bsuffix-drop-guessed : {tr tr' : Trail Γ} {p : Lit Γ} {n : ℕ}
                      → Backtrack-suffix {Γ} tr (p , tr')
                      → drop-guessed tr (suc n) ＝ drop-guessed tr' n
 bsuffix-drop-guessed {n} bsf =
-  ap (Maybe.rec [] (λ ptr → drop-guessed (ptr .snd) n)) (eq-backtrack-suffix bsf)
+  ap (Maybe.rec [] (λ ptr → drop-guessed (ptr .snd) n))
+     (∈→=just $ ∈-backtrack-suffix bsf)
 
 -- backjumping
 
@@ -666,7 +663,7 @@ bsuffix→bjsuffix : ∀ {tr tr' : Trail Γ} {p}
                 → Backjump-suffix tr tr'
 bsuffix→bjsuffix {tr} {tr'} bs =
     ap (Maybe.rec [] (λ ptr → ptr .snd))
-       (eq-backtrack-suffix bs ⁻¹)
+       (∈→=just (∈-backtrack-suffix bs) ⁻¹)
   ∙ ap (drop-guessed tr)
        (+-cancel-∸-r 1 (count-guessed tr') ⁻¹)
   ∙ ap (λ q → drop-guessed tr (q ∸ count-guessed tr'))

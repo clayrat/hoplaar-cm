@@ -98,25 +98,20 @@ dpli-loop-backtrack : ∀ {x y}
 
                     → (p : Lit Γ)
                     → (trr : Trail Γ)
-                    → backtrack tr ＝ just (p , trr)
+                    → Backtrack-suffix tr (p , trr)
 
                     → Bool
-dpli-loop-backtrack {Γ} {x} {y} ih tr ti ti2 rj ri ex ey p trr eb =
+dpli-loop-backtrack {Γ} {x} {y} ih tr ti ti2 rj ri ex ey p trr bsf =
   Box∷×.call ih prf
     -- computational arg
     ((negate p , deduced) ∷ trr)
     --
     (push-trailinv {tm = deduced} np∉ ti')
-    (push-deduced-trailinv2 np∉ ti' ti2')
+    (push-deduced-trailinv2 np∉ ti' (bsuffix-trailinv2 bsf ti ti2))
     (bump-at bfin p rj)
     (bump-rejstkinv-deduced {rj = rj} (bsuffix→bjsuffix bsf) cg< ri) -- TODO a version with Backtrack-suffix
     refl refl
   where
-  bsf : Backtrack-suffix tr (p , trr)
-  bsf = all-unjust (subst (λ q → Allₘ (Backtrack-suffix tr) q)
-                          eb
-                          (backtrack-suffix {tr = tr}))
-
   np∉ : negate p ∉ trail-lits trr
   np∉ = bsuffix→negate∉ ti ti2 bsf
 
@@ -124,7 +119,7 @@ dpli-loop-backtrack {Γ} {x} {y} ih tr ti ti2 rj ri ex ey p trr eb =
   bcg = bsuffix→count-guessed bsf
 
   cg< : count-guessed trr < sizeₛ Γ
-  cg< = <≃suc≤ $   =→≤ (bcg ⁻¹) ∙ count-guessed-size ti ti2
+  cg< = <≃suc≤ $ =→≤ (bcg ⁻¹) ∙ count-guessed-size ti ti2
 
   bfin : Fin (sizeₛ Γ)
   bfin = ℕ→fin (count-guessed trr) cg<
@@ -144,7 +139,6 @@ dpli-loop-backtrack {Γ} {x} {y} ih tr ti ti2 rj ri ex ey p trr eb =
   dtr = udptr .snd .snd
 
   ti' = bsuffix-trailinv bsf ti
-  ti2' = bsuffix-trailinv2 bsf ti ti2
 
   p∉r : p ∉ lookupᵥ rj bfin
   p∉r = rejstkinv-∉ {rj = rj} {tr' = trr} bsf bjsuffix-refl cg< ti ti2 ri
@@ -213,9 +207,11 @@ dpli-loop-guess {Γ} cls {x} {y} ih tr ti ti2 rj ri ex ey cls' tr' ti' ti2' us' 
     (push-rejstkinv-guessed {rj = rj} us' ri)
     refl refl
   where
+  -- computational
   pp∈ : Σ[ l ꞉ Lit Γ ] (l ∈ ps)
   pp∈ = posneg-rule cls' ps ne
   p = pp∈ .fst
+  --
   p∈ = pp∈ .snd
   pnp∉ : p ∉ trail-lits tr' × negate p ∉ trail-lits tr'
   pnp∉ = unassigned-∉ {c = cls} (subst (p ∈_) eps p∈)
@@ -223,6 +219,7 @@ dpli-loop-guess {Γ} cls {x} {y} ih tr ti ti2 rj ri ex ey cls' tr' ti' ti2' us' 
   np∉ = pnp∉ .snd
   ti'' : Trail-Inv ((p , guessed) ∷ tr')
   ti'' = push-trailinv {tm = guessed} p∉ ti'
+
   prf : (  map (λ q → 2 · sizeₛ Γ ∸ sizeₛ q) rj
          , 2 · sizeₛ Γ ∸ suc (length tr'))
           Box∷×.<∷× (x , y)
@@ -237,11 +234,12 @@ dpli-loop : CNF Γ → ∀[ □∷× (DPLI-ty {Γ}) ⇒ DPLI-ty ]
 dpli-loop {Γ} cls {x = x , y} ih tr ti ti2 rj ri ex ey =
   let (cls' , tr' , ti' , ti2' , us') = unit-propagate-iter cls tr ti ti2 in
   if List.has [] cls'
-    then Maybe.elim (λ m → backtrack tr ＝ m → Bool)
+    then Maybe.rec-with-∈
+           (backtrack tr)
            (λ _ → false)
-           (λ where (p , trr) eb →
-                       dpli-loop-backtrack ih tr ti ti2 rj ri ex ey p trr eb)
-           (backtrack tr) refl
+           (λ where (p , trr) mb →
+                       dpli-loop-backtrack ih tr ti ti2 rj ri ex ey p trr
+                                           (backtrack-suffix-∈ mb))
     else let ps = unassigned cls tr' in
          Dec.rec
            (λ _ → true)

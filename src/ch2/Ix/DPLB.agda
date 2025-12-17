@@ -100,29 +100,26 @@ backjump-loop-backtrack : {Γ : Ctx} → CNF Γ → (p : Lit Γ)
 
                         → (q : Lit Γ)
                         → (trr : Trail Γ)
-                        → backtrack tr ＝ just (q , trr)
+                        → Backtrack-suffix tr (q , trr)
 
                         → Σ[ tr' ꞉ Trail Γ ] (Trail-Inv tr' × Trail-Inv2 tr' × Backjump-suffix tr tr')
-backjump-loop-backtrack cls p {x} ih tr e p∉ np∉ ti ti2 q trr eb =
+backjump-loop-backtrack cls p {x} ih tr e p∉ np∉ ti ti2 q trr bsf =
   let (cls' , tr' , ti' , ti2' , us') = unit-propagate-iter cls ((p , guessed) ∷ trr)
                                           (push-trailinv {tm = guessed} p∉r tir)
                                           (push-guessed-trailinv2 np∉r ti2r)
    in
   if List.has [] cls'
      then
-       (let (  tr'
-             , ti' , ti2' , ts') = Box.call ih prf
-                                   trr
-                                   refl p∉r np∉r tir ti2r
+       (let (  tr' , ti' , ti2'
+             , ts'              ) = Box.call ih prf
+                                      trr
+                                      refl p∉r np∉r tir ti2r
          in
-          tr'
-        , ti' , ti2'
+          tr' , ti' , ti2'
         , bjsuffix-trans (bsuffix→bjsuffix bsf) ts')
      else
        tr , ti , ti2 , bjsuffix-refl
   where
-  bsf : Backtrack-suffix tr (q , trr)
-  bsf = backtrack-suffix-eq eb
   tr⊆ : trail-lits trr ⊆ trail-lits tr
   tr⊆ = map-⊆ fst (ope→subset $ suffix→ope $ suffix-uncons $ bsuffix→suffix bsf)
   p∉r : p ∉ trail-lits trr
@@ -141,11 +138,11 @@ backjump-loop-backtrack cls p {x} ih tr e p∉ np∉ ti ti2 q trr eb =
 backjump-loop : {Γ : Ctx} → CNF Γ → (p : Lit Γ)
               → ∀[ □ BJ-ty p ⇒ BJ-ty p ]
 backjump-loop {Γ} cls p {x} ih tr e p∉ np∉ ti ti2 =
-  Maybe.elim (λ m → backtrack tr ＝ m
-                  → Σ[ tr' ꞉ Trail Γ ] (Trail-Inv tr' × Trail-Inv2 tr' × Backjump-suffix tr tr'))
+  Maybe.rec-with-∈
+    (backtrack tr)
     (λ _ → tr , ti , ti2 , bjsuffix-refl)
-    (λ where (q , trr) → backjump-loop-backtrack cls p ih tr e p∉ np∉ ti ti2 q trr)
-    (backtrack tr) refl
+    (λ where (q , trr) →   backjump-loop-backtrack cls p ih tr e p∉ np∉ ti ti2 q trr
+                         ∘ backtrack-suffix-∈)
 
 backjump : CNF Γ
          → (p : Lit Γ)
@@ -182,10 +179,10 @@ dplb-loop-backjump : ∀ {x y}
 
                    → (p : Lit Γ)
                    → (trr : Trail Γ)
-                   → backtrack tr ＝ just (p , trr)
+                   → Backtrack-suffix tr (p , trr)
 
                    → Bool
-dplb-loop-backjump {Γ} {x} {y} ih cls tr ti ti2 rj ri ex ey p trr eb =
+dplb-loop-backjump {Γ} {x} {y} ih cls tr ti ti2 rj ri ex ey p trr bsf =
   Box∷×.call ih
     prf
     -- computational args
@@ -201,11 +198,6 @@ dplb-loop-backjump {Γ} {x} {y} ih cls tr ti ti2 rj ri ex ey p trr eb =
        ri)
     refl refl
   where
-  bsf : Backtrack-suffix tr (p , trr)
-  bsf = all-unjust (subst (λ q → Allₘ (Backtrack-suffix tr) q)
-                          eb
-                          (backtrack-suffix {tr = tr}))
-
   p∉ : p ∉ trail-lits trr
   p∉ = bsuffix→∉ ti bsf
 
@@ -331,18 +323,19 @@ dplb-loop-guess {Γ} {x} {y} ih cls tr ti ti2 rj ri ex ey cls' tr' ti' ti2' us' 
 dplb-loop : ∀[ □∷× (DPLB-ty {Γ}) ⇒ DPLB-ty ]
 dplb-loop {Γ} {x = x , y} ih cls tr ti ti2 rj ri ex ey =
   let (cls' , tr' , ti' , ti2' , us') = unit-propagate-iter cls tr ti ti2 in
-  Dec.rec
-    (λ _ → Maybe.elim (λ m → backtrack tr ＝ m → Bool)
-              (λ _ → false)
-              (λ where (p , trr) eb →
-                          dplb-loop-backjump ih cls tr ti ti2 rj ri ex ey p trr eb)
-              (backtrack tr) refl)
-    (λ _ → let ps = unassigned cls tr' in
-           Dec.rec (λ _ → true)
-                   (λ ne → dplb-loop-guess ih cls  tr  ti  ti2  rj ri ex ey
-                                              cls' tr' ti' ti2' us' ps ne refl)
-                   (Dec-is-nil? {xs = ps}))
-    ([] ∈? cls')
+  if List.has [] cls'
+    then Maybe.rec-with-∈
+           (backtrack tr)
+           (λ _ → false)
+           (λ where (p , trr) mb →
+                       dplb-loop-backjump ih cls tr ti ti2 rj ri ex ey p trr
+                                          (backtrack-suffix-∈ mb))
+    else let ps = unassigned cls tr' in
+         Dec.rec
+           (λ _ → true)
+           (λ ne → dplb-loop-guess ih cls  tr  ti  ti2  rj ri ex ey
+                                      cls' tr' ti' ti2' us' ps ne refl)
+           (Dec-is-nil? {xs = ps})
 
 dplb : CNF Γ → Bool
 dplb {Γ} c =
