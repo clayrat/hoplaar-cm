@@ -126,12 +126,12 @@ trail-has : Trail Γ → Lit Γ → Bool
 trail-has tr l = List.has l (trail-lits tr)
 
 trail-pvars : Trail Γ → List (Var × Bool)
-trail-pvars = map < unlit , positive > ∘ trail-lits
+trail-pvars = map unpack ∘ trail-lits
 
 trail-pvars-++ : {tr1 tr2 : Trail Γ} → trail-pvars (tr1 ++ tr2) ＝ trail-pvars tr1 ++ trail-pvars tr2
 trail-pvars-++ {tr1} {tr2} =
-    ap (map < unlit , positive >) (trail-lits-++ {tr1 = tr1} {tr2 = tr2})
-  ∙ map-++ < unlit , positive > (trail-lits tr1) (trail-lits tr2)
+    ap (map unpack) (trail-lits-++ {tr1 = tr1} {tr2 = tr2})
+  ∙ map-++ unpack (trail-lits tr1) (trail-lits tr2)
 
 count-guessed : Trail Γ → ℕ
 count-guessed = count (is-guessed? ∘ snd)
@@ -169,8 +169,8 @@ prepend-trailinv : {tr tr' : Trail Γ}
                  → Trail-Inv (tr' ++ tr)
 prepend-trailinv {tr} {tr'} ti' ti dj =
   subst Uniq
-        (  map-++ < unlit , positive > (trail-lits tr') _ ⁻¹
-         ∙ ap (map < unlit , positive >)
+        (  map-++ unpack (trail-lits tr') _ ⁻¹
+         ∙ ap (map unpack)
             (trail-lits-++ {tr1 = tr'}) ⁻¹) $
   uniq→++ ti' ti $
   ∥-map unpack-inj dj
@@ -260,18 +260,18 @@ bsuffix→∉ : {tr tr' : Trail Γ} {p : Lit Γ}
 bsuffix→∉ {tr'} {p} ti bsf p∈ =
   ++→uniq
      (subst Uniq
-            (  ap (map < unlit , positive >)
+            (  ap (map unpack)
                   (  ap trail-lits
                         (bsf .snd .snd ∙ ++-assoc (bsf .fst) (_ ∷ []) tr'  ⁻¹)
                    ∙ trail-lits-++ {tr1 = bsf .fst ++ _ ∷ []})
-             ∙ map-++ < unlit , positive > (trail-lits (bsf .fst ++ _ ∷ [])) (trail-lits tr')
+             ∙ map-++ unpack (trail-lits (bsf .fst ++ _ ∷ [])) (trail-lits tr')
              ∙ ap (_++ trail-pvars tr')
-                  (  ap (map < unlit , positive >) (map-++ fst (bsf .fst) ((p , guessed) ∷ []))
-                   ∙ map-++ < unlit , positive > (trail-lits (bsf .fst)) (p ∷ [])))
+                  (  ap (map unpack) (map-++ fst (bsf .fst) ((p , guessed) ∷ []))
+                   ∙ map-++ unpack (trail-lits (bsf .fst)) (p ∷ [])))
             ti)
      .snd .snd
      (any-++-r (here refl))
-     (List.∈-map (< unlit , positive >) p∈)
+     (List.∈-map (unpack) p∈)
 
 bsuffix→count-guessed : {tr tr' : Trail Γ} {p : Lit Γ}
                       → Backtrack-suffix tr (p , tr')
@@ -374,7 +374,7 @@ tail-of-bsuffix {tr'} {p} ti (pr , ad , e) =
                                                         (  ap trail-pvars e
                                                          ∙ trail-pvars-++ {tr1 = pr})
                                                         ti) in
-                      dj (List.∈-map < unlit , positive > p∈) (here refl))
+                      dj (List.∈-map unpack p∈) (here refl))
   ∙ tail-of-∷ {z = p}
 
 -- a proper trail only guesses each variable once
@@ -397,11 +397,11 @@ bsuffix→negate∉ {tr} {tr'} {p} ti ti2 bsf =
           ∙ tail-of-++-r (λ p∈' →
                            ++→uniq
                              (subst Uniq
-                                    (  ap (map < unlit , positive >) etr
-                                     ∙ map-++ < unlit , positive > (trail-lits (bsf .fst)) (p ∷ trail-lits tr'))
+                                    (  ap (map unpack) etr
+                                     ∙ map-++ unpack (trail-lits (bsf .fst)) (p ∷ trail-lits tr'))
                                     ti)
                              .snd .snd
-                             (List.∈-map (< unlit , positive >) p∈')
+                             (List.∈-map unpack p∈')
                              (here refl))
           ∙ tail-of-∷ {z = p}) $
   ti2 p $
@@ -412,7 +412,6 @@ bsuffix→negate∉ {tr} {tr'} {p} ti ti2 bsf =
   etr : trail-lits tr ＝ trail-lits (bsf .fst) ++ p ∷ trail-lits tr'
   etr =   ap trail-lits (bsf .snd .snd)
         ∙ trail-lits-++ {tr1 = bsf .fst}
-
 
 -- TODO try proving via ≟
 push-deduced-trailinv2 : {tr : Trail Γ} {p : Lit Γ}
@@ -426,7 +425,7 @@ push-deduced-trailinv2 {tr} {p} p∉ ti ti2 z z∈ =
                 (tail-of-++-r $
                  ¬any-∷ (λ z=np →
                            uniq-uncons (push-trailinv {tm = deduced} p∉ ti) .fst $
-                           List.∈-map < unlit , positive > $
+                           List.∈-map unpack $
                            List.∈-map fst $
                            subst (λ q → (q , guessed) ∈ tr) z=np z∈')
                         false!)) $
@@ -488,14 +487,14 @@ bsuffix-trailinv2 {tr} {tr'} {p} bsf ti ti2 z z∈ =
                   subst (λ q → negate z ∈ q)
                         (tail-of-++-r {z = z} {xs = trail-lits (bsf .fst ++ _ ∷ [])}
                                       (λ z∈' → ++→uniq
-                                                 (subst Uniq (  ap (map < unlit , positive >) etr
-                                                              ∙ map-++ < unlit , positive > (trail-lits (bsf .fst ++ _ ∷ [])) (trail-lits tr')
-                                                              ∙ ap (map < unlit , positive > (trail-lits (bsf .fst ++ (p , guessed) ∷ [])) ++_)
+                                                 (subst Uniq (  ap (map unpack) etr
+                                                              ∙ map-++ unpack (trail-lits (bsf .fst ++ _ ∷ [])) (trail-lits tr')
+                                                              ∙ ap (map unpack (trail-lits (bsf .fst ++ (p , guessed) ∷ [])) ++_)
                                                                    (happly (map-pres-comp ⁻¹) tr'))
                                                         ti)
                                                  .snd .snd
-                                                 (List.∈-map (< unlit , positive >) z∈')
-                                                 (List.∈-map (< unlit , positive > ∘ fst) z∈)) ⁻¹)
+                                                 (List.∈-map unpack z∈')
+                                                 (List.∈-map (unpack ∘ fst) z∈)) ⁻¹)
                   nz∈) $
   ti2 z $
   subst ((z , guessed) ∈_)
@@ -566,7 +565,7 @@ count-guessed-size {Γ} {tr} ti1 ti2 =
          ∙ map-length {f = unlit} ⁻¹
          ∙ size-unique (uniq-guessed ti1 ti2) ⁻¹)
   ∙ size-⊆ λ x∈ →
-              let x∈' = list-∈ {xs = guessed-vars tr} x∈
+              let x∈' = list-⊆ {xs = guessed-vars tr} x∈
                   (y , y∈ , ye) = List.map-∈Σ unlit x∈'
                 in
               subst (_∈ Γ) (ye ⁻¹) (unlit∈ y)
@@ -752,11 +751,11 @@ rejstkinv-∉ {tr} {tr0} {tr'} {p} bsf bjsf cg< ti ti2 ri p∈ =
         (tail-of-++-r (λ p∈' →
                            ++→uniq
                              (subst Uniq
-                                    (  ap (map < unlit , positive >) etr
-                                     ∙ map-++ < unlit , positive > (trail-lits (bsf .fst)) (p ∷ trail-lits tr0))
+                                    (  ap (map unpack) etr
+                                     ∙ map-++ unpack (trail-lits (bsf .fst)) (p ∷ trail-lits tr0))
                                     ti)
                              .snd .snd
-                             (List.∈-map (< unlit , positive >) p∈')
+                             (List.∈-map unpack p∈')
                              (here refl)) ⁻¹) $
   subst (negate p ∈_)
         (tail-of-∷ {z = p} ⁻¹) $

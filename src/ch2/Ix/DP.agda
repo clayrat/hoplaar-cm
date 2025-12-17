@@ -159,7 +159,7 @@ affirmative-negative-rule clauses =
              (l , l∈pr) = length>0→Σ ([ id
                                       , (λ e → absurd (contra length=0→nil pr≠[] (e ⁻¹)))
                                       ]ᵤ (≤→<⊎= z≤))
-             l∈Δ = ∈-mapₛ (∈-list l∈pr)
+             l∈Δ = ∈-mapₛ (⊆-list l∈pr)
            in
          inl ( Δ , (unlit l , l∈Δ , map-unlit-⊆ pr l∈Δ)
               , delete-clauses clauses Δ))
@@ -187,11 +187,11 @@ resolve-part l (c ∷ cl) =
                          (λ u∈ → rec! (λ m m∈ → [ (λ l=m → ∉-rem-= {xs = c}
                                                              (subst (_∈ remₗ l c)
                                                                     (l=m ⁻¹)
-                                                                    (list-∈ m∈)))
+                                                                    (list-⊆ m∈)))
                                                 , (λ l=nm → n∉c (ope→subset filter-OPE
                                                                     (subst (_∈ remₗ l c)
                                                                            (negate-swap l=nm)
-                                                                           (list-∈ m∈))))
+                                                                           (list-⊆ m∈))))
                                                 ]ᵤ ∘ unlit-eq)
                                       (mapₛ-∈ u∈))
                      ∷ p)
@@ -205,18 +205,18 @@ resolve-part l (c ∷ cl) =
                         (λ u∈ → rec! (λ m m∈ → [ (λ l=m → l∉c (ope→subset filter-OPE
                                                                   (subst (_∈ remₗ (negate l) c)
                                                                          (l=m ⁻¹)
-                                                                         (list-∈ m∈))) )
+                                                                         (list-⊆ m∈))) )
                                                 , (λ l=nm → ∉-rem-= {xs = c}
                                                              (subst (_∈ remₗ (negate l) c)
                                                                     (negate-swap l=nm)
-                                                                    (list-∈ m∈)))
+                                                                    (list-⊆ m∈)))
                                                 ]ᵤ ∘ unlit-eq)
                                      (mapₛ-∈ u∈))
                     ∷ n
                   , o)
          (λ n∉c →   p
                   , n
-                  ,   map-with-∈ c
+                  ,   List.map-with-∈ c
                         (λ a a∈ → avoid-lit-var a
                                     ([ (λ e → l∉c (subst (_∈ c) e a∈))
                                      , (λ e → n∉c (subst (_∈ c) e a∈))

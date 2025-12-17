@@ -123,12 +123,12 @@ trail-has : Trail Γ → Lit Γ → Bool
 trail-has tr l = List.has l (trail-lits tr)
 
 trail-pvars : Trail Γ → List (Var × Bool)
-trail-pvars = map < unlit , positive > ∘ trail-lits
+trail-pvars = map unpack ∘ trail-lits
 
 trail-pvars-++ : {tr1 tr2 : Trail Γ} → trail-pvars (tr1 ++ tr2) ＝ trail-pvars tr1 ++ trail-pvars tr2
 trail-pvars-++ {tr1} {tr2} =
-    ap (map < unlit , positive >) (trail-lits-++ {tr1 = tr1} {tr2 = tr2})
-  ∙ map-++ < unlit , positive > (trail-lits tr1) (trail-lits tr2)
+    ap (map unpack) (trail-lits-++ {tr1 = tr1} {tr2 = tr2})
+  ∙ map-++ unpack (trail-lits tr1) (trail-lits tr2)
 
 count-guessed : Trail Γ → ℕ
 count-guessed = count (is-guessed? ∘ snd)
@@ -344,7 +344,7 @@ count-guessed-size {Γ} {tr} ti1 ti2 =
          ∙ map-length {f = unlit} ⁻¹
          ∙ size-unique (uniq-guessed ti1 ti2) ⁻¹)
   ∙ size-⊆ λ x∈ →
-              let x∈' = list-∈ {xs = guessed-vars tr} x∈
+              let x∈' = list-⊆ {xs = guessed-vars tr} x∈
                   (y , y∈ , ye) = List.map-∈Σ unlit x∈'
                 in
               subst (_∈ Γ) (ye ⁻¹) (unlit∈ y)
@@ -443,9 +443,9 @@ unit-subpropagate-loop {x} ih {Γ} cls tr e ti ti2 =
   -- TODO streamline
   ti' : Trail-Inv tr'
   ti' = subst Uniq (happly map-pres-comp tr') $
-        subst Uniq (map-++ (< unlit , positive > ∘ fst) _ tr ⁻¹) $
-        subst (λ q → Uniq (q (map (_, deduced) newunits) ++ q tr)) (map-pres-comp {f = fst} {g = < unlit , positive >} ⁻¹) $
-        subst (λ q → Uniq (map < unlit , positive > q ++ trail-pvars tr)) (happly map-pres-comp newunits) $
+        subst Uniq (map-++ (unpack ∘ fst) _ tr ⁻¹) $
+        subst (λ q → Uniq (q (map (_, deduced) newunits) ++ q tr)) (map-pres-comp {f = fst} {g = unpack} ⁻¹) $
+        subst (λ q → Uniq (map unpack q ++ trail-pvars tr)) (happly map-pres-comp newunits) $
         subst (λ q → Uniq (q ++ trail-pvars tr)) (happly map-pres-comp newunits) $
         uniq→++
           (uniq-map unpack-inj $
@@ -453,7 +453,7 @@ unit-subpropagate-loop {x} ih {Γ} cls tr e ti ti2 =
                       {xs = concat (filter (is-fresh-unit-clause tr) cls')})
           ti
           λ {x} x∈nu x∈tr →
-           let (z , z∈ , ze) = List.map-∈Σ < unlit , positive > x∈nu
+           let (z , z∈ , ze) = List.map-∈Σ unpack x∈nu
                (zs , zs∈ , z∈') = ∈-concat {xss = filter (is-fresh-unit-clause tr) cls'}
                                   (ope→subset {ys = concat (filter (is-fresh-unit-clause tr) cls')}
                                     (nub-ope {cmp = _=?_}) z∈)
@@ -462,7 +462,7 @@ unit-subpropagate-loop {x} ih {Γ} cls tr e ti ti2 =
               in
             ll (map-∈ _ unpack-inj $
                 subst (_∈ trail-pvars tr)
-                      (ze ∙ ap < unlit , positive > (any-¬there false! (subst (z ∈_) zse z∈')))
+                      (ze ∙ ap unpack (any-¬there false! (subst (z ∈_) zse z∈')))
                       x∈tr)
 
   ti2' : Trail-Inv2 tr'

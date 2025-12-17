@@ -70,7 +70,7 @@ posneg-count cls l =
   m + n
 
 pair∈ : {A : 𝒰} (l : List A) → List (Σ[ a ꞉ A ] (a ∈ l))
-pair∈ l = map-with-∈ l _,_
+pair∈ l = List.map-with-∈ l _,_
 
 pair∈-[] : {A : 𝒰} {l : List A} → pair∈ l ＝ [] → l ＝ []
 pair∈-[] {l = []}    _ = refl
