@@ -115,28 +115,14 @@ dpli-loop-backtrack {Γ} {x} {y} ih tr ti ti2 rj ri ex ey p trr bsf =
   np∉ : negate p ∉ trail-lits trr
   np∉ = bsuffix→negate∉ ti ti2 bsf
 
-  bcg : count-guessed tr ＝ suc (count-guessed trr)
-  bcg = bsuffix→count-guessed bsf
+--  bcg : count-guessed tr ＝ suc (count-guessed trr)
+--  bcg = bsuffix→count-guessed bsf
 
   cg< : count-guessed trr < sizeₛ Γ
-  cg< = <≃suc≤ $ =→≤ (bcg ⁻¹) ∙ count-guessed-size ti ti2
+  cg< = <≃suc≤ $ =→≤ (bsuffix→count-guessed bsf ⁻¹) ∙ count-guessed-size ti ti2
 
   bfin : Fin (sizeₛ Γ)
   bfin = ℕ→fin (count-guessed trr) cg<
-
-  pr = bsf .fst
-  etr = bsf .snd .snd ⁻¹
-  udptr :   Uniq (trail-pvars pr)
-          × Uniq (trail-pvars ((p , guessed) ∷ trr))
-          × (trail-pvars pr ∥ trail-pvars ((p , guessed) ∷ trr))
-  udptr = ++→uniq {xs = trail-pvars pr}
-                  (subst Uniq
-                         (trail-pvars-++ {tr1 = pr}) $
-                   subst (Uniq ∘ trail-pvars)
-                         (etr ⁻¹)
-                         ti)
-  uptr = udptr .snd .fst
-  dtr = udptr .snd .snd
 
   ti' = bsuffix-trailinv bsf ti
 

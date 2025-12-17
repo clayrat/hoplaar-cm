@@ -210,13 +210,14 @@ dplb-loop-backjump {Γ} {x} {y} ih cls tr ti ti2 rj ri ex ey p trr bsf =
             (bsuffix-trailinv bsf ti)
             (bsuffix-trailinv2 bsf ti ti2)
   tr' = trti' .fst
-  ti' = trti' .snd .fst
-  ti2' = trti' .snd .snd .fst
-  ts' = trti' .snd .snd .snd
 
   declits = filter (is-guessed? ∘ snd) tr'
   conflict = insert-s (negate p) (image (negate ∘ fst) declits)
   --
+
+  ti' = trti' .snd .fst
+  ti2' = trti' .snd .snd .fst
+  ts' = trti' .snd .snd .snd
 
   np∉' : negate p ∉ trail-lits tr'
   np∉' = contra (map-⊆ fst (ope→subset $ suffix→ope $ bjsuffix→suffix ts')) np∉
