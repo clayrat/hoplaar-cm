@@ -68,441 +68,15 @@ open import ch2.Ix.NF
 open import ch2.Ix.CNF
 open import ch2.Ix.DP
 open import ch2.Ix.DPLL
+open import ch2.Ix.DPTrail
 
 private variable
   A : 𝒰
   v : Var
   Γ Δ Ξ : Ctx
 
--- iterative
-
-data Trailmix : 𝒰 where
-  guessed deduced : Trailmix
-
-tmxeq : Trailmix → Trailmix → Bool
-tmxeq guessed guessed = true
-tmxeq deduced deduced = true
-tmxeq _ _ = false
-
-is-guessed : Trailmix → 𝒰
-is-guessed guessed = ⊤
-is-guessed deduced = ⊥
-
-is-guessed? : Trailmix → Bool
-is-guessed? guessed = true
-is-guessed? deduced = false
-
-instance
-  Reflects-is-guessed : ∀ {t} → Reflects (is-guessed t) (is-guessed? t)
-  Reflects-is-guessed {t = guessed} = ofʸ tt
-  Reflects-is-guessed {t = deduced} = ofⁿ id
-
-guessed≠deduced : guessed ≠ deduced
-guessed≠deduced p = subst is-guessed p tt
-
-instance
-  Reflects-Trailmix-Path : ∀ {t₁ t₂} → Reflects (t₁ ＝ t₂) (tmxeq t₁ t₂)
-  Reflects-Trailmix-Path {(guessed)} {(guessed)} = ofʸ refl
-  Reflects-Trailmix-Path {(guessed)} {(deduced)} = ofⁿ guessed≠deduced
-  Reflects-Trailmix-Path {(deduced)} {(guessed)} = ofⁿ (guessed≠deduced ∘ _⁻¹)
-  Reflects-Trailmix-Path {(deduced)} {(deduced)} = ofʸ refl
-
-  Trailmix-is-discrete : is-discrete Trailmix
-  Trailmix-is-discrete = reflects-path→is-discrete!
-
-Trail : Ctx → 𝒰
-Trail Γ = List (Lit Γ × Trailmix)
-
-trail-lits : Trail Γ → List (Lit Γ)
-trail-lits = map fst
-
-trail-lits-++ : {tr1 tr2 : Trail Γ} → trail-lits (tr1 ++ tr2) ＝ trail-lits tr1 ++ trail-lits tr2
-trail-lits-++ {tr1} {tr2} = map-++ fst tr1 tr2
-
-trail-has : Trail Γ → Lit Γ → Bool
-trail-has tr l = List.has l (trail-lits tr)
-
-trail-pvars : Trail Γ → List (Var × Bool)
-trail-pvars = map < unlit , positive > ∘ trail-lits
-
-trail-pvars-++ : {tr1 tr2 : Trail Γ} → trail-pvars (tr1 ++ tr2) ＝ trail-pvars tr1 ++ trail-pvars tr2
-trail-pvars-++ {tr1} {tr2} =
-    ap (map < unlit , positive >) (trail-lits-++ {tr1 = tr1} {tr2 = tr2})
-  ∙ map-++ < unlit , positive > (trail-lits tr1) (trail-lits tr2)
-
-count-guessed : Trail Γ → ℕ
-count-guessed = count (is-guessed? ∘ snd)
-
--- TODO duplication but it's probably more hassle to fiddle with eliminators
-trail-pvars⊆ : {tr : Trail Γ} → trail-pvars tr ⊆ polarize Γ
-trail-pvars⊆ {Γ} {x = xl , false} x∈ =
-  let (y , y∈ , ye) = List.map-∈Σ _ x∈ in
-  ∈ₛ-∪∷←r {s₁ = mapₛ (_, true) Γ}
-          (∈-mapₛ (subst (_∈ Γ) (ap fst ye ⁻¹) (unlit∈ y)))
-trail-pvars⊆ {Γ} {x = xl , true}  x∈ =
-  let (y , y∈ , ye) = List.map-∈Σ _ x∈ in
-  ∈ₛ-∪∷←l (∈-mapₛ (subst (_∈ Γ) (ap fst ye ⁻¹) (unlit∈ y)))
-
--- a proper trail mentions each literal once
-Trail-Inv : Trail Γ → 𝒰
-Trail-Inv = Uniq ∘ trail-pvars
-
-emp-trailinv : Trail-Inv {Γ} []
-emp-trailinv = []ᵘ
-
-opaque
-  unfolding Suffix
-  suffix-trailinv : {tr0 tr : Trail Γ}
-                  → Suffix tr0 tr
-                  → Trail-Inv tr
-                  → Trail-Inv tr0
-  suffix-trailinv (pr , e) ti =
-    ++→uniq (subst Uniq (ap trail-pvars (e ⁻¹) ∙ trail-pvars-++ {tr1 = pr}) ti) .snd .fst
-
-trail-inv≤ : {tr : Trail Γ} → Trail-Inv tr → length tr ≤ 2 · sizeₛ Γ
-trail-inv≤ {Γ} {tr} ti =
-    =→≤ (  map-length ⁻¹ ∙ map-length ⁻¹
-         ∙ size-unique ti ⁻¹
-         ∙ ap sizeₛ (from-list-map {xs = trail-lits tr}) ⁻¹
-         ∙ size-map-inj unpack-inj)
-  ∙ lit-set-size
-
-backtrack : Trail Γ → Maybe (Lit Γ × Trail Γ)
-backtrack []                   = nothing
-backtrack ((_ , deduced) ∷ xs) = backtrack xs
-backtrack ((p , guessed) ∷ xs) = just (p , xs)
-
-All-deduced : Trail Γ → 𝒰
-All-deduced tr = All (λ q → ¬ is-guessed (q. snd)) tr
-
-backtrack-++-l : ∀ {pr tr : Trail Γ}
-               → All-deduced pr
-               → backtrack (pr ++ tr) ＝ backtrack tr
-backtrack-++-l {pr = []}                  []     = refl
-backtrack-++-l {pr = (l , guessed) ∷ pr} (d ∷ a) = absurd (d tt)
-backtrack-++-l {pr = (l , deduced) ∷ pr} (d ∷ a) = backtrack-++-l a
-
-Backtrack-suffix : Trail Γ → Lit Γ × Trail Γ → 𝒰
-Backtrack-suffix {Γ} tr (p , tr′) =
-  Σ[ pr ꞉ Trail Γ ] (  All-deduced pr
-                     × (tr ＝ pr ++ (p , guessed) ∷ tr′))
-
-opaque
-  unfolding Suffix
-  bsuffix→suffix : {tr tr' : Trail Γ} {p : Lit Γ}
-                 → Backtrack-suffix {Γ} tr (p , tr') → Suffix ((p , guessed) ∷ tr') tr
-  bsuffix→suffix (pr , _ , e) = (pr , e ⁻¹)
-
-backtrack-suffix : {tr : Trail Γ} → Allₘ (Backtrack-suffix tr) (backtrack tr)
-backtrack-suffix {tr = []}                 = nothing
-backtrack-suffix {tr = (p , guessed) ∷ tr} =
-  just ([] , [] , refl)
-backtrack-suffix {tr = (p , deduced) ∷ tr} =
-  all-mapₘ (λ where (pr , apr , e) →
-                      ( (p , deduced) ∷ pr)
-                      , id ∷ apr
-                      , ap ((p , deduced) ∷_) e) $
-  backtrack-suffix {tr = tr}
-
-bsuffix→count-guessed : {tr tr' : Trail Γ} {p : Lit Γ}
-                      → Backtrack-suffix tr (p , tr')
-                      → count-guessed tr ＝ suc (count-guessed tr')
-bsuffix→count-guessed {tr'} (pr , apr , e) =
-    ap count-guessed e
-  ∙ count-++ _ pr _
-  ∙ ap (_+ (suc (count-guessed tr')))
-       (none→count _ pr (all-map (not-so ∘ contra (so→true! ⦃ Reflects-is-guessed ⦄)) apr))
-
-unassigned : CNF Γ → Trail Γ → List (Lit Γ)
-unassigned cls trail =
-  subtract
-    (unions (image (image abs) cls))
-    (image (abs ∘ fst) trail)
-
-unassigned-∉ : {c : CNF Γ} {tr : Trail Γ} {l : Lit Γ}
-             → l ∈ unassigned c tr
-             → l ∉ trail-lits tr × negate l ∉ trail-lits tr
-unassigned-∉ {c} {tr} {l} l∈u =
-  let (l∈u , l∉ta) = subtract-∈ l∈u
-      (ls , ls∈ , l∈′) = unions-∈ l∈u
-      (zs , zs∈ , lse) = image-∈Σ {xs = c} ls∈
-      (q , q∈ , zse) = image-∈Σ {xs = zs} (subst (l ∈_) lse l∈′)
-    in
-    (λ l∈t → l∉ta $
-             ⊆-nub {R = λ _ _ → Reflects-lit Reflects-String-Path} $
-             subst (_∈ map (abs ∘ fst) tr) (abs-idem ∙ zse ⁻¹) $
-             subst (abs (abs q) ∈_) (happly map-pres-comp tr ⁻¹) $
-             List.∈-map _ $
-             subst (_∈ trail-lits tr) zse l∈t)
-  , (λ nl∈t → l∉ta $
-              ⊆-nub {R = λ _ _ → Reflects-lit Reflects-String-Path} $
-              subst (_∈ map (abs ∘ fst) tr) (abs-negate ∙ abs-idem ∙ zse ⁻¹) $
-              subst (abs (negate (abs q)) ∈_) (happly map-pres-comp tr ⁻¹) $
-              List.∈-map abs $
-              subst (λ q → negate q ∈ trail-lits tr) zse nl∈t)
-
--- TODO I'll drop the lookup structure as our kvmaps are lists internally anyway
--- and it's a hassle to keep it in sync with the trail
-
-is-fresh-unit-clause : Trail Γ → Clause Γ → Bool
-is-fresh-unit-clause tr []          = false
-is-fresh-unit-clause tr (l ∷ [])    = not (trail-has tr l)
-is-fresh-unit-clause tr (_ ∷ _ ∷ _) = false
-
-fresh-unit-clause-prop : {tr : Trail Γ} {c : Clause Γ}
-                       → ⌞ is-fresh-unit-clause tr c ⌟
-                       → Σ[ l ꞉ Lit Γ ] (c ＝ l ∷ []) × (l ∉ trail-lits tr)
-fresh-unit-clause-prop {tr} {c = l ∷ []} ifuc =
-  l , refl , so→false! ifuc
-
-tail-of : Lit Γ → List (Lit Γ) → List (Lit Γ)
-tail-of x ls = List.tail (span (λ q → not (Lit-= _=?_ q x)) ls .snd)
-
-tail-of-∷ : {z : Lit Γ} {xs : List (Lit Γ)}
-          → tail-of z (z ∷ xs) ＝ xs
-tail-of-∷ {z} =
-  ap (λ q → List.tail (q .snd))
-     (if-false $
-      subst So (not-invol _ ⁻¹) $
-      true→so! ⦃ Reflects-lit Reflects-String-Path {lx = z} ⦄ refl)
-
-tail-of-++-r : {z : Lit Γ} {xs ys : List (Lit Γ)}
-             → z ∉ xs → tail-of z (xs ++ ys) ＝ tail-of z ys
-tail-of-++-r {z} {xs} z∉ =
-  ap (λ q → List.tail (q .snd))
-     (span-++-r xs $
-      all-map (λ {x} →
-                    not-so
-                  ∘ contra (  _⁻¹
-                            ∘ so→true! ⦃ Reflects-lit Reflects-String-Path {lx = x} ⦄)) $
-      ¬Any→All¬ z∉)
-
--- a proper trail only guesses each variable once
-Trail-Inv2 : Trail Γ → 𝒰
-Trail-Inv2 tr =
-  ∀ x → (x , guessed) ∈ tr
-      → negate x ∉ tail-of x (trail-lits tr)
-
-emp-trailinv2 : Trail-Inv2 {Γ = Γ} []
-emp-trailinv2 x = false!
-
-guessed-vars : Trail Γ → List Var
-guessed-vars = map unlit ∘ trail-lits ∘ filter (is-guessed? ∘ snd)
-
--- TODO should this be Inv2 instead?
--- TODO copypaste
-uniq-guessed : {tr : Trail Γ}
-             → Trail-Inv tr → Trail-Inv2 tr
-             → Uniq (guessed-vars tr)
-uniq-guessed {tr = []}                  ti1        ti2 = []ᵘ
-uniq-guessed {tr = (x , guessed) ∷ tr} (ni ∷ᵘ ti1) ti2 =
-  contra (λ x∈ → let (y , y∈ , ye) = List.map-∈Σ unlit x∈
-                     ((z , ztr) , z∈ , ze) = List.map-∈Σ fst y∈
-                   in
-                 [ (λ y=x → List.∈-map _ $
-                            subst (_∈ map fst tr) (ze ⁻¹ ∙ y=x) $
-                            List.∈-map _ $
-                            ope→subset filter-OPE z∈)
-                 , (λ y=nx → absurd (ti2 x (here refl) $
-                                     subst (negate x ∈_)
-                                           (tail-of-∷ {z = x} {xs = trail-lits tr} ⁻¹) $
-                                     subst (_∈ trail-lits tr)
-                                           (ze ⁻¹ ∙ y=nx) $
-                                     List.∈-map _ $
-                                     ope→subset filter-OPE z∈))
-                 ]ᵤ (unlit-eq {x = y} {y = x} (ye ⁻¹)))
-         ni ∷ᵘ uniq-guessed ti1
-                  λ z z∈ →
-                     subst (negate z ∉_)
-                           (tail-of-++-r
-                              (¬any-∷
-                                 (contra (λ z=x → List.∈-map _ $
-                                                  List.∈-map _ $
-                                                  subst (λ q → (q , guessed) ∈ tr) z=x z∈)
-                                         ni)
-                                 false!)) $
-                     ti2 z (there z∈)
-uniq-guessed {tr = (x , deduced) ∷ tr} (ni ∷ᵘ ti1)  ti2 =
-  uniq-guessed ti1
-    λ z z∈ →
-       subst (negate z ∉_)
-             (tail-of-++-r
-                (¬any-∷
-                   (contra (λ z=x → List.∈-map _ $
-                                    List.∈-map _ $
-                                    subst (λ q → (q , guessed) ∈ tr) z=x z∈)
-                           ni)
-                   false!)) $
-       ti2 z (there z∈)
-
-count-guessed-size : {tr : Trail Γ}
-                   → Trail-Inv tr → Trail-Inv2 tr
-                   → count-guessed tr ≤ sizeₛ Γ
-count-guessed-size {Γ} {tr} ti1 ti2 =
-    =→≤ (  length-filter _ tr ⁻¹
-         ∙ map-length {f = fst} ⁻¹
-         ∙ map-length {f = unlit} ⁻¹
-         ∙ size-unique (uniq-guessed ti1 ti2) ⁻¹)
-  ∙ size-⊆ λ x∈ →
-              let x∈' = list-∈ {xs = guessed-vars tr} x∈
-                  (y , y∈ , ye) = List.map-∈Σ unlit x∈'
-                in
-              subst (_∈ Γ) (ye ⁻¹) (unlit∈ y)
-
-USP-suffix : Trail Γ → Trail Γ → 𝒰
-USP-suffix {Γ} tr' tr =
-  Σ[ pr ꞉ Trail Γ ] (  All-deduced pr
-                     × (tr' ＝ pr ++ tr))
-
-uspsuffix→len : {tr tr' : Trail Γ}
-              → USP-suffix tr' tr
-              → length tr ≤ length tr'
-uspsuffix→len {tr} (pr , a , e) =
-    ≤-+-l
-  ∙ =→≤ (  ++-length pr tr ⁻¹
-         ∙ ap length (e ⁻¹) )
-
-uspsuffix→count-guessed : {tr tr' : Trail Γ}
-                        → USP-suffix tr' tr
-                        → count-guessed tr ＝ count-guessed tr'
-uspsuffix→count-guessed {tr} (pr , a , e) =
-    ap (_+ count-guessed tr)
-       (none→count _ pr
-          (all-map false→so! a) ⁻¹)
-  ∙ count-++ _ pr tr ⁻¹
-  ∙ ap count-guessed (e ⁻¹)
-
-Rejstk : Ctx → 𝒰
-Rejstk Γ = Vec (LFSet (Lit Γ)) (sizeₛ Γ)
-
--- iterated backtrack
-drop-guessed : Trail Γ → ℕ → Trail Γ
-drop-guessed tr 0 = tr
-drop-guessed tr (suc n) =
-  Maybe.rec
-    []
-    (λ ptr → drop-guessed (ptr .snd) n)
-    (backtrack tr)
-
-drop-guessed-++-l : ∀ {pr tr : Trail Γ} {n}
-                  → All-deduced pr
-                  → 0 < n
-                  → drop-guessed (pr ++ tr) n ＝ drop-guessed tr n
-drop-guessed-++-l {n = zero} a nz = false! nz
-drop-guessed-++-l {n = suc n} a _ = ap (Maybe.rec [] (λ ptr → drop-guessed (ptr .snd) n)) (backtrack-++-l a)
-
-Rejstk-Inv : Rejstk Γ → Trail Γ → 𝒰
-Rejstk-Inv {Γ} rj tr =
-  ∀ x (f : Fin (sizeₛ Γ))
-      → x ∈ lookupᵥ rj f
-      → negate x ∈ (trail-lits $ drop-guessed tr (count-guessed tr ∸ fin→ℕ f))
-
-emp-rejstkinv : Rejstk-Inv (replicateᵥ (sizeₛ Γ) []) []
-emp-rejstkinv x f x∈ =
-  false! ⦃ Refl-x∉ₛ[] ⦄ $
-  subst (x ∈ₛ_) (lookup-replicate f) x∈
-
-bump-at-fun : ∀ {n} → Lit Γ → Vec (LFSet (Lit Γ)) n → ℕ → Fin n → LFSet (Lit Γ)
-bump-at-fun l r k f =
-  if fin→ℕ f <? k
-    then lookupᵥ r f
-    else if fin→ℕ f == k
-           then l ∷ lookupᵥ r f
-           else []
-
-bump-at : Fin (sizeₛ Γ) → Lit Γ → Rejstk Γ → Rejstk Γ
-bump-at f l r =
-  tabulate (bump-at-fun l r (fin→ℕ f))
-
-USP-ty : ℕ → 𝒰
-USP-ty x = {Γ : Ctx}
-         → CNF Γ → (tr : Trail Γ)
-         → x ＝ 2 · sizeₛ Γ ∸ length tr
-         → Trail-Inv tr
-         → Trail-Inv2 tr
-         → CNF Γ × (Σ[ tr' ꞉ Trail Γ ] (  Trail-Inv tr'
-                                        × Trail-Inv2 tr'
-                                        × USP-suffix tr' tr))
-
-unit-subpropagate-loop : ∀[ □ USP-ty ⇒ USP-ty ]
-unit-subpropagate-loop {x} ih {Γ} cls tr e ti ti2 =
-  Dec.rec (λ _ → cls' , tr , ti , ti2 , [] , [] , refl)
-          (λ ne → let (cls0 , tr0 , ti0 , ti20 , (pr0 , a0 , e0)) =
-                          Box.call ih (prf ne) cls' tr' refl ti' ti2'
-                  in ( cls0 , tr0 , ti0 , ti20
-                     , pr0 ++ map (_, deduced) newunits
-                     , all-++ a0 (all→map (all-trivial (λ _ → id)))
-                     , e0 ∙ ++-assoc pr0 _ tr ⁻¹))
-          (Dec-is-nil? {xs = newunits})
-  where
-  cls' = map (filter (not ∘ trail-has tr ∘ negate)) cls
-  newunits = unions (filter (is-fresh-unit-clause tr) cls')
-  tr' = map (_, deduced) newunits ++ tr
-
-  -- propositional (proof) part
-  -- TODO streamline
-  ti' : Trail-Inv tr'
-  ti' = subst Uniq (happly map-pres-comp tr') $
-        subst Uniq (map-++ (< unlit , positive > ∘ fst) _ tr ⁻¹) $
-        subst (λ q → Uniq (q (map (_, deduced) newunits) ++ q tr)) (map-pres-comp {f = fst} {g = < unlit , positive >} ⁻¹) $
-        subst (λ q → Uniq (map < unlit , positive > q ++ trail-pvars tr)) (happly map-pres-comp newunits) $
-        subst (λ q → Uniq (q ++ trail-pvars tr)) (happly map-pres-comp newunits) $
-        uniq→++
-          (uniq-map unpack-inj $
-           nub-unique {R = λ _ _ → Lit-is-discrete .proof}
-                      {xs = concat (filter (is-fresh-unit-clause tr) cls')})
-          ti
-          λ {x} x∈nu x∈tr →
-           let (z , z∈ , ze) = List.map-∈Σ < unlit , positive > x∈nu
-               (zs , zs∈ , z∈') = ∈-concat {xss = filter (is-fresh-unit-clause tr) cls'}
-                                  (ope→subset {ys = concat (filter (is-fresh-unit-clause tr) cls')}
-                                    (nub-ope {cmp = _=?_}) z∈)
-               (fzs , _) = filter-∈ {p = is-fresh-unit-clause tr} {xs = cls'} zs∈
-               (lz , zse , ll) = fresh-unit-clause-prop {c = zs} fzs
-              in
-            ll (map-∈ _ unpack-inj $
-                subst (_∈ trail-pvars tr)
-                      (ze ∙ ap < unlit , positive > (any-¬there false! (subst (z ∈_) zse z∈')))
-                      x∈tr)
-
-  ti2' : Trail-Inv2 tr'
-  ti2' x x∈ =
-    subst (λ q → negate x ∉ tail-of x q)
-           (trail-lits-++ {tr1 = map (_, deduced) newunits} {tr2 = tr} ⁻¹) $
-    [ (λ am → absurd (guessed≠deduced $ ap snd $ List.Any→Σ∈ (any←map am) .snd .snd))
-    , (λ x∈' →
-          subst (negate x ∉_)
-                (tail-of-++-r
-                   (λ x∈m → ++→uniq (subst Uniq
-                                           (trail-pvars-++ {tr1 = map (_, deduced) newunits} {tr2 = tr})
-                                           ti')
-                              .snd .snd
-                              (List.∈-map _ x∈m)
-                              (List.∈-map _ (List.∈-map _ x∈'))) ⁻¹) $
-          ti2 x x∈')
-    ]ᵤ (any-split x∈)
-
-  prf : newunits ≠ [] → 2 · sizeₛ Γ ∸ length tr' < x
-  prf ne =
-    <-≤-trans
-      (<-∸-2l-≃ (trail-inv≤ ti') ⁻¹ $
-       <-≤-trans
-         (<-+-0lr (<-≤-trans
-                     (≱→< $ contra (length=0→nil ∘ ≤0→=0) ne)
-                     (=→≤ (map-length ⁻¹))))
-         (=→≤ (++-length _ tr ⁻¹)))
-      (=→≤ (e ⁻¹))
-
-unit-propagate-iter : {Γ : Ctx}
-                    → CNF Γ → (tr : Trail Γ) → Trail-Inv tr → Trail-Inv2 tr
-                    → CNF Γ × (Σ[ tr' ꞉ Trail Γ ] (  Trail-Inv tr'
-                                                   × Trail-Inv2 tr'
-                                                   × USP-suffix tr' tr))
-unit-propagate-iter cls tr ti ti2 =
-  Box.fix USP-ty unit-subpropagate-loop cls tr refl ti ti2
-
-TSI-ty : {Γ : Ctx} → Vec ℕ (sizeₛ Γ) × ℕ → 𝒰
-TSI-ty {Γ} (x , y) =
+DPLI-ty : {Γ : Ctx} → Vec ℕ (sizeₛ Γ) × ℕ → 𝒰
+DPLI-ty {Γ} (x , y) =
     (tr : Trail Γ)
   → (ti : Trail-Inv tr)
   → (ti2 : Trail-Inv2 tr)
@@ -513,7 +87,7 @@ TSI-ty {Γ} (x , y) =
   → Bool
 
 dpli-loop-backtrack : ∀ {x y}
-                    → (□∷× TSI-ty) (x , y)
+                    → (□∷× DPLI-ty) (x , y)
                     → (tr : Trail Γ)
                     → (ti : Trail-Inv tr)
                     → (ti2 : Trail-Inv2 tr)
@@ -539,12 +113,16 @@ dpli-loop-backtrack {Γ} {x} {y} ih tr ti ti2 rj ri ex ey p trr eb =
   bsf = all-unjust (subst (λ q → Allₘ (Backtrack-suffix tr) q)
                           eb
                           (backtrack-suffix {tr = tr}))
+
   bcg : count-guessed tr ＝ suc (count-guessed trr)
   bcg = bsuffix→count-guessed bsf
+
   cg< : count-guessed trr < sizeₛ Γ
   cg< = <≃suc≤ $   =→≤ (bcg ⁻¹) ∙ count-guessed-size ti ti2
+
   bfin : Fin (sizeₛ Γ)
   bfin = ℕ→fin (count-guessed trr) cg<
+
   pr = bsf .fst
   etr = bsf .snd .snd ⁻¹
   udptr :   Uniq (trail-pvars pr)
@@ -558,6 +136,7 @@ dpli-loop-backtrack {Γ} {x} {y} ih tr ti ti2 rj ri ex ey p trr eb =
                          ti)
   uptr = udptr .snd .fst
   dtr = udptr .snd .snd
+
   ti'' : Trail-Inv ((negate p , deduced) ∷ trr)
   ti'' = contra (map-∈ _ unpack-inj)
                 (λ np∈ → ti2 p (subst ((p , guessed) ∈_)
@@ -574,6 +153,7 @@ dpli-loop-backtrack {Γ} {x} {y} ih tr ti ti2 rj ri ex ey p trr eb =
                                        (tail-of-∷ {z = p} ⁻¹)
                                        np∈))
          ∷ᵘ (snd $ uniq-uncons $ suffix-trailinv (bsuffix→suffix bsf) ti)
+
   ti2'' : Trail-Inv2 ((negate p , deduced) ∷ trr)
   ti2'' z z∈ =
     let z∈' = any-¬here (λ e → absurd (guessed≠deduced (ap snd e))) z∈ in
@@ -609,6 +189,7 @@ dpli-loop-backtrack {Γ} {x} {y} ih tr ti ti2 rj ri ex ey p trr eb =
           etr $
     any-++-r $
     there z∈'
+
   ri'' : Rejstk-Inv (bump-at bfin p rj) ((negate p , deduced) ∷ trr)
   ri'' x f x∈ =
     Dec.elim
@@ -663,6 +244,7 @@ dpli-loop-backtrack {Γ} {x} {y} ih tr ti ti2 rj ri ex ey p trr eb =
       (subst (x ∈_)
              (lookup-tabulate {f = bump-at-fun p rj (fin→ℕ bfin)} f)
              x∈)
+
   prf : (  map (λ q → 2 · sizeₛ Γ ∸ sizeₛ q)
                 (bump-at bfin p rj)
          , 2 · sizeₛ Γ ∸ suc (length trr))
@@ -722,7 +304,7 @@ dpli-loop-backtrack {Γ} {x} {y} ih tr ti ti2 rj ri ex ey p trr eb =
 
 dpli-loop-guess : (cls : CNF Γ)
                 → ∀ {x y}
-                → (□∷× TSI-ty) (x , y)
+                → (□∷× DPLI-ty) (x , y)
                 → (tr : Trail Γ)
                 → (ti : Trail-Inv tr)
                 → (ti2 : Trail-Inv2 tr)
@@ -834,25 +416,25 @@ dpli-loop-guess {Γ} cls {x} {y} ih tr ti ti2 rj ri ex ey cls' tr' ti' ti2' us' 
                    ≤≃<suc $ (uspsuffix→len us'))
                   (=→≤ (ey ⁻¹)))
 
-dpli-loop : CNF Γ → ∀[ □∷× (TSI-ty {Γ}) ⇒ TSI-ty ]
+dpli-loop : CNF Γ → ∀[ □∷× (DPLI-ty {Γ}) ⇒ DPLI-ty ]
 dpli-loop {Γ} cls {x = x , y} ih tr ti ti2 rj ri ex ey =
   let (cls' , tr' , ti' , ti2' , us') = unit-propagate-iter cls tr ti ti2 in
-  Dec.rec
-    (λ cp → Maybe.elim (λ m → backtrack tr ＝ m → Bool)
-              (λ _ → false)
-              (λ where (p , trr) eb →
-                          dpli-loop-backtrack ih tr ti ti2 rj ri ex ey p trr eb)
-              (backtrack tr) refl)
-    (λ _ → let ps = unassigned cls tr' in
-           Dec.rec (λ _ → true)
-                   (λ ne → dpli-loop-guess cls ih tr  ti  ti2  rj ri ex ey
-                                           cls'   tr' ti' ti2' us' ps ne refl)
-                   (Dec-is-nil? {xs = ps}))
-    ([] ∈? cls')
+  if List.has [] cls'
+    then Maybe.elim (λ m → backtrack tr ＝ m → Bool)
+           (λ _ → false)
+           (λ where (p , trr) eb →
+                       dpli-loop-backtrack ih tr ti ti2 rj ri ex ey p trr eb)
+           (backtrack tr) refl
+    else let ps = unassigned cls tr' in
+         Dec.rec
+           (λ _ → true)
+           (λ ne → dpli-loop-guess cls ih tr  ti  ti2  rj ri ex ey
+                                   cls'   tr' ti' ti2' us' ps ne refl)
+           (Dec-is-nil? {xs = ps})
 
 dpli : CNF Γ → Bool
 dpli {Γ} c =
-  Box∷×.fix∷× TSI-ty
+  Box∷×.fix∷× DPLI-ty
     (dpli-loop c)
     []
     (emp-trailinv {Γ = Γ})
