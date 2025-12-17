@@ -268,7 +268,7 @@ dnf-naive f =
       sv = all-sat-vals (eval f) (λ _ → false) ps
     in
   list-disj $
-  map (mklits (map-with-∈ ps (λ a a∈ →
+  map (mklits (List.map-with-∈ ps (λ a a∈ →
    let a∈' = varsᵢ-⊆ {f = f}
                (map-⊆ unvar (ope→subset (nub-ope {cmp = _=?_})) a∈)
              in

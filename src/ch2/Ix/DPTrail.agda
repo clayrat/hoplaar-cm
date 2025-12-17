@@ -820,6 +820,8 @@ emp-rejstkinv x f x∈ =
   subst (x ∈ₛ_) (lookup-replicate f) x∈
 
 -- TODO these 3 are adhoc/messy
+
+-- TODO a version with Backtrack-suffix?
 rejstkinv-∉ : {rj : Rejstk Γ} {tr tr0 tr' : Trail Γ} {p : Lit Γ}
             → Backtrack-suffix tr (p , tr0)
             → Backjump-suffix tr0 tr'
@@ -866,6 +868,7 @@ rejstkinv-∉ {tr} {tr0} {tr'} {p} bsf bjsf cg< ti ti2 ri p∈ =
   etr =   ap trail-lits (bsf .snd .snd)
         ∙ trail-lits-++ {tr1 = bsf .fst}
 
+-- TODO a version with Backtrack-suffix?
 bump-rejstkinv-deduced : {rj : Rejstk Γ} {tr tr' : Trail Γ} {p : Lit Γ}
                        → Backjump-suffix tr tr'
                        → (cg< : count-guessed tr' < sizeₛ Γ)
