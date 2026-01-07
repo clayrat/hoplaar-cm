@@ -604,7 +604,7 @@ drop-guessed-suffix {tr} {n = suc n} with backtrack tr | backtrack-suffix {tr = 
 ... | just (p , tr0) | m =
   suffix-trans
     (drop-guessed-suffix {n = n})
-    (suffix-uncons $ bsuffix→suffix $ all-unjust m)
+    (suffix1-weaken $ suffix-uncons1 $ bsuffix→suffix $ all-unjust m)
 ... | nothing        | _ = []-suffix
 
 cg-drop-guessed : ∀ {n} {tr : Trail Γ}
@@ -728,7 +728,7 @@ unit-subpropagate-loop {x} ih {Γ} cls tr e ti ti2 =
                      , (  pr0 ++ tru
                         , all-++ a0 (all→map (all-trivial (λ _ → id)))
                         , e0 ∙ ++-assoc pr0 _ tr ⁻¹)))
-          (Dec-is-nil? {xs = newunits})
+          (Dec-is-nil? newunits)
   where
   cls' = map (filter (not ∘ trail-has tr ∘ negate)) cls
   newunits = unions (filter (is-fresh-unit-clause tr) cls')

@@ -306,8 +306,8 @@ lit-set⊆ {Γ} {x = xl , xb} x∈ =
     (λ y y∈ ye →
         Bool.elim
            {P = λ q → (xl , q) ∈ₛ mapₛ (_, q) Γ → (xl , q) ∈ₛ polarize Γ}
-            ∈ₛ-∪∷←l
-           (∈ₛ-∪∷←r {s₁ = mapₛ (_, true) Γ})
+            ⊆-∪∷-l
+           (⊆-∪∷-r {s₁ = mapₛ (_, true) Γ})
            xb (∈-mapₛ {f = _, xb} (subst (_∈ Γ) (ap fst ye ⁻¹) (unlit∈ y))))
     (mapₛ-∈ x∈)
 

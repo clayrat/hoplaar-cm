@@ -52,7 +52,7 @@ open import ch2.Ix.Formula
 open import ch2.Ix.Lit
 open import ch2.Ix.NF
 open import ch2.Ix.CNF
-open import ch2.Ix.DP
+open import ch2.Ix.DPCore
 
 private variable
   A : 𝒰
@@ -62,38 +62,12 @@ private variable
 open KVOps
 open KVOps2
 
-posneg-count : CNF Γ → Lit Γ → ℕ
-posneg-count cls l =
-  let m = length $ filter (List.has          l) cls
-      n = length $ filter (List.has $ negate l) cls
-    in
-  m + n
+-- induction on context size, identical to DP
+DPLL-ty : ℕ → 𝒰
+DPLL-ty x = {Γ : Ctx} → x ＝ sizeₛ Γ
+                      → CNF Γ → Bool
 
-pair∈ : {A : 𝒰} (l : List A) → List (Σ[ a ꞉ A ] (a ∈ l))
-pair∈ l = List.map-with-∈ l _,_
-
-pair∈-[] : {A : 𝒰} {l : List A} → pair∈ l ＝ [] → l ＝ []
-pair∈-[] {l = []}    _ = refl
-pair∈-[] {l = x ∷ l} p = false! p
-
-posneg-rule : CNF Γ → (ls : List (Lit Γ)) → ls ≠ []
-            → Σ[ l ꞉ Lit Γ ] (l ∈ ls)
-posneg-rule {Γ} c ls ne =
-  let ml = List⁺.from-list (pair∈ ls) in
-  Maybe.elim (λ m → ml ＝ m → Σ[ l ꞉ Lit Γ ] (l ∈ ls))
-    (λ e → absurd (ne (pair∈-[] (from-list-nothing e))))
-    (λ pvs _ → snd $ foldr₁ (min-on fst) $
-               map⁺ (λ where (l , l∈) → posneg-count c l , l , l∈) pvs)
-    ml
-    refl
-
-splitting-rule : (c : CNF Γ) → ⌞ any positive (unions c) ⌟
-               → Lit Γ
-splitting-rule {Γ} clauses prf =
-  posneg-rule clauses (unions clauses)
-    (λ e → false! $ subst (So ∘ any positive) e prf) .fst
-
-dpll-loop : ∀[ □ CSI-ty ⇒ CSI-ty ]
+dpll-loop : ∀[ □ DPLL-ty ⇒ DPLL-ty ]
 dpll-loop ih {Γ} e c =
   Dec.rec
     (λ _ → true)
@@ -141,10 +115,10 @@ dpll-loop ih {Γ} e c =
                                       refl c′)
                         (one-lit-rule c))
               ([] ∈? c))
-    (Dec-is-nil? {xs = c})
+    (Dec-is-nil? c)
 
 dpll : CNF Γ → Bool
-dpll = Box.fix CSI-ty dpll-loop refl
+dpll = Box.fix DPLL-ty dpll-loop refl
 
 dpllsat : Formulaᵢ Γ → Bool
 dpllsat = dpll ∘ snd ∘ defcnfs

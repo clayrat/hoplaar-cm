@@ -232,8 +232,8 @@ list-conjΣ : List (Σ[ Γ ꞉ Ctx ] (Formulaᵢ Γ)) → Σ[ Γ ꞉ Ctx ] (Form
 list-conjΣ =
     Maybe.rec ([] , True)
               (foldr₁ (λ where (Γ , f) (Δ , g) →
-                                 (Γ ∪∷ Δ) , And (wk  ∈ₛ-∪∷←l           f)
-                                                (wk (∈ₛ-∪∷←r {s₁ = Γ}) g)))
+                                 (Γ ∪∷ Δ) , And (wk  ⊆-∪∷-l           f)
+                                                (wk (⊆-∪∷-r {s₁ = Γ}) g)))
   ∘ List⁺.from-list
 
 list-disj : List (Formulaᵢ Γ) → Formulaᵢ Γ
@@ -243,8 +243,8 @@ list-disjΣ : List (Σ[ Γ ꞉ Ctx ] (Formulaᵢ Γ)) → Σ[ Γ ꞉ Ctx ] (Form
 list-disjΣ =
     Maybe.rec ([] , False)
               (foldr₁ (λ where (Γ , f) (Δ , g) →
-                                 (Γ ∪∷ Δ) , Or (wk  ∈ₛ-∪∷←l           f)
-                                               (wk (∈ₛ-∪∷←r {s₁ = Γ}) g)))
+                                 (Γ ∪∷ Δ) , Or (wk  ⊆-∪∷-l           f)
+                                               (wk (⊆-∪∷-r {s₁ = Γ}) g)))
   ∘ List⁺.from-list
 
 mklits : {Γ : LFSet A}

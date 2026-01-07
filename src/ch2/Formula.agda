@@ -280,25 +280,25 @@ atoms-⊆ {A} {f} =
         subst (q ∈_)
               (  ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs) ⁻¹
                ∙ ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ y})) ∘
-        ⊆-∪∷-r (hy zs ∘ list-⊆) ∘
+        ⊆-∪∷-2r (hy zs ∘ list-⊆) ∘
         hx (over-atoms _∷_ y zs) {x = q})
      (λ {x} {y} hx hy zs {x = q} →
         subst (q ∈_)
               (  ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs) ⁻¹
                ∙ ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ y})) ∘
-        ⊆-∪∷-r (hy zs ∘ list-⊆) ∘
+        ⊆-∪∷-2r (hy zs ∘ list-⊆) ∘
         hx (over-atoms _∷_ y zs) {x = q})
      (λ {x} {y} hx hy zs {x = q} →
         subst (q ∈_)
               (  ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs) ⁻¹
                ∙ ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ y})) ∘
-        ⊆-∪∷-r (hy zs ∘ list-⊆) ∘
+        ⊆-∪∷-2r (hy zs ∘ list-⊆) ∘
         hx (over-atoms _∷_ y zs) {x = q})
      (λ {x} {y} hx hy zs {x = q} →
         subst (q ∈_)
               (  ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs) ⁻¹
                ∙ ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ y})) ∘
-        ⊆-∪∷-r (hy zs ∘ list-⊆) ∘
+        ⊆-∪∷-2r (hy zs ∘ list-⊆) ∘
         hx (over-atoms _∷_ y zs) {x = q})
      f
      []
@@ -335,25 +335,25 @@ atoms-⊇ {A} {f} =
      id
      (λ {x} {y} hx hy zs {x = q} →
         hx (over-atoms _∷_ y zs) {x = q} ∘
-        ⊆-∪∷-r (⊆-list ∘ hy zs) ∘
+        ⊆-∪∷-2r (⊆-list ∘ hy zs) ∘
         subst (q ∈_)
               (  ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ x})
                ∙ ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs)))
      (λ {x} {y} hx hy zs {x = q} →
         hx (over-atoms _∷_ y zs) {x = q} ∘
-        ⊆-∪∷-r (⊆-list ∘ hy zs) ∘
+        ⊆-∪∷-2r (⊆-list ∘ hy zs) ∘
         subst (q ∈_)
               (  ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ x})
                ∙ ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs)))
      (λ {x} {y} hx hy zs {x = q} →
         hx (over-atoms _∷_ y zs) {x = q} ∘
-        ⊆-∪∷-r (⊆-list ∘ hy zs) ∘
+        ⊆-∪∷-2r (⊆-list ∘ hy zs) ∘
         subst (q ∈_)
               (  ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ x})
                ∙ ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs)))
      (λ {x} {y} hx hy zs {x = q} →
         hx (over-atoms _∷_ y zs) {x = q} ∘
-        ⊆-∪∷-r (⊆-list ∘ hy zs) ∘
+        ⊆-∪∷-2r (⊆-list ∘ hy zs) ∘
         subst (q ∈_)
               (  ap (LFSet.from-list zs ∪∷_) (∪∷-comm {x = atomsₛ x})
                ∙ ∪∷-assoc {y = atomsₛ y} (LFSet.from-list zs)))

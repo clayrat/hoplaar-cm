@@ -115,9 +115,6 @@ dpli-loop-backtrack {Γ} {x} {y} ih tr ti ti2 rj ri ex ey p trr bsf =
   np∉ : negate p ∉ trail-lits trr
   np∉ = bsuffix→negate∉ ti ti2 bsf
 
---  bcg : count-guessed tr ＝ suc (count-guessed trr)
---  bcg = bsuffix→count-guessed bsf
-
   cg< : count-guessed trr < sizeₛ Γ
   cg< = <≃suc≤ $ =→≤ (bsuffix→count-guessed bsf ⁻¹) ∙ count-guessed-size ti ti2
 

@@ -415,13 +415,13 @@ chk  True     = True
 chk (Atom a)  = Atom (av a (hereₛ refl))
 chk (Not x)   = Not (chk x)
 chk (And x y) =
-  And (wk ∈ₛ-∪∷←l (chk x)) (wk (∈ₛ-∪∷←r {s₁ = atomsₛ x}) (chk y))
+  And (wk ⊆-∪∷-l (chk x)) (wk (⊆-∪∷-r {s₁ = atomsₛ x}) (chk y))
 chk (Or x y)  =
-  Or (wk ∈ₛ-∪∷←l (chk x)) (wk (∈ₛ-∪∷←r {s₁ = atomsₛ x}) (chk y))
+  Or (wk ⊆-∪∷-l (chk x)) (wk (⊆-∪∷-r {s₁ = atomsₛ x}) (chk y))
 chk (Imp x y) =
-  Imp (wk ∈ₛ-∪∷←l (chk x)) (wk (∈ₛ-∪∷←r {s₁ = atomsₛ x}) (chk y))
+  Imp (wk ⊆-∪∷-l (chk x)) (wk (⊆-∪∷-r {s₁ = atomsₛ x}) (chk y))
 chk (Iff x y) =
-  Iff (wk ∈ₛ-∪∷←l (chk x)) (wk (∈ₛ-∪∷←r {s₁ = atomsₛ x}) (chk y))
+  Iff (wk ⊆-∪∷-l (chk x)) (wk (⊆-∪∷-r {s₁ = atomsₛ x}) (chk y))
 
 ers : {Γ : LFSet A}
     → Formulaᵢ Γ → Formula A

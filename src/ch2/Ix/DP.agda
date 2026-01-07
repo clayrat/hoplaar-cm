@@ -50,231 +50,19 @@ open import ch2.Ix.Formula
 open import ch2.Ix.Lit
 open import ch2.Ix.NF
 open import ch2.Ix.CNF
+open import ch2.Ix.DPCore
 
 private variable
   A : 𝒰
   v : Var
   Γ : Ctx
 
--- ==== 1-LITERAL RULE aka BCP aka UNIT PROPAGATION ====
-
-unit-clause : CNF Γ → Maybe (Lit Γ)
-unit-clause  []               = nothing
-unit-clause (        []  ∷ c) = unit-clause c
-unit-clause ((x ∷    []) ∷ c) = just x
-unit-clause ((x ∷ y ∷ f) ∷ c) = unit-clause c
-
-{-
-reflects-unit-clause : (c : CNF Γ) → ReflectsΣ (λ l → (l ∷ []) ∈ c) (unit-clause c)
-reflects-unit-clause  []               = ofⁿ λ _ → false!
-reflects-unit-clause (        []  ∷ c) =
-  ReflectsΣ.dmap
-    (λ _ → there)
-    (λ _ → contra (any-¬here false!))
-    (reflects-unit-clause c)
-reflects-unit-clause ((x ∷    []) ∷ c) = ofʲ x (here refl)
-reflects-unit-clause ((x ∷ y ∷ f) ∷ c) =
-  ReflectsΣ.dmap
-    (λ _ → there)
-    (λ _ → contra (any-¬here (false! ∘ ∷-tail-inj)))
-    (reflects-unit-clause c)
-
-dec-unit-clause : (c : CNF Γ) → DecΣ (λ (l : Lit Γ) → (l ∷ []) ∈ c)
-dec-unit-clause c .doesm  = unit-clause c
-dec-unit-clause c .proofm = reflects-unit-clause c
--}
-
-delete-var : (v : Var) → Clause Γ → Clause (rem v Γ)
-delete-var v [] = []
-delete-var v (l ∷ c) =
-  Dec.rec
-    (λ _ → delete-var v c)
-    (λ ne → avoid-lit-var l ne ∷ delete-var v c)
-    (v ≟ unlit l)
-
--- TODO reformulate w/ Var ?
-
-unit-propagate : (l : Lit Γ) → CNF Γ → CNF (rem (unlit l) Γ)
-unit-propagate l []      = []
-unit-propagate l (f ∷ c) =
-  if hasₗ l f
-    then unit-propagate l c
-    else delete-var (unlit l) f ∷ unit-propagate l c
-
-one-lit-rule : CNF Γ → Maybe (Σ[ l ꞉ Lit Γ ] (CNF (rem (unlit l) Γ)))
-one-lit-rule clauses = map (λ l → l , unit-propagate l clauses) (unit-clause clauses)
-
-{-
-dec-one-lit-rule : (c : CNF Γ)
-                 → DecΣ (λ (l : Lit Γ) → (l ∷ []) ∈ c × CNF (rem (unlit l) Γ))
-dec-one-lit-rule c =
-  DecΣ.dmap
-    (λ l l∈ → l∈ , unit-propagate l c)
-    (λ l → contra fst)
-    (dec-unit-clause c)
--}
-
--- ==== AFFIRMATIVE-NEGATIVE aka PURE LITERAL RULE ====
-
-delete-clauses : CNF Γ → (Δ : Ctx) → CNF (minus Γ Δ)
-delete-clauses []      Δ = []
-delete-clauses (f ∷ c) Δ =
-  Dec.rec
-    (λ d →   avoid-ctx-clause f (λ {x} → d {x}) -- ugh
-           ∷ delete-clauses c Δ)
-    (λ _ → delete-clauses c Δ)
-    (LFSet.Dec-disjoint {s = mapₛ unlit $ LFSet.from-list f} {t = Δ})
-
-affirmative-negative-rule : (c : CNF Γ) → (Σ[ Δ ꞉ Ctx ] (Δ ≬ Γ) × CNF (minus Γ Δ))
-                                        ⊎ (∀ {l} → l ∈ unions c → negate l ∈ unions c)
-affirmative-negative-rule clauses =
-  let (neg0 , pos) = partition negative (unions clauses)
-      neg = image negate neg0
-      posonly = diff pos neg
-      negonly = diff neg pos
-      pr = union posonly (image negate negonly)
-    in
-  Dec.rec
-    (λ pr=[] → inr $
-               let (ww , qq) = union-empty pr=[]
-                   pp = partition-filter {p = negative} {xs = unions clauses}
-                 in
-               λ {l} l∈ → Dec.rec
-                            (λ p → ope→subset (filter-OPE {p = negative}) $
-                                   subst (negate l ∈_) (ap fst pp) $
-                                   image-∈ negate-inj $
-                                   diff-⊆ ww $
-                                   subst (_∈ pos) (negate-invol ⁻¹) $
-                                   subst (l ∈_) (ap snd pp ⁻¹) $
-                                   ∈-filter p l∈)
-                            (λ np → ope→subset (filter-OPE {p = positive}) $
-                                    subst (negate l ∈_) (ap snd pp) $
-                                    diff-⊆ (image-empty qq) $
-                                    ∈-image $
-                                    subst (l ∈_) (ap fst pp ⁻¹) $
-                                    ∈-filter (subst So (not-invol _) (not-so np)) l∈)
-                            (Dec-So {b = positive l}))
-    (λ pr≠[] →
-         let Δ = mapₛ unlit (LFSet.from-list pr)
-             (l , l∈pr) = length>0→Σ ([ id
-                                      , (λ e → absurd (contra length=0→nil pr≠[] (e ⁻¹)))
-                                      ]ᵤ (≤→<⊎= z≤))
-             l∈Δ = ∈-mapₛ (⊆-list l∈pr)
-           in
-         inl ( Δ , (unlit l , l∈Δ , map-unlit-⊆ pr l∈Δ)
-              , delete-clauses clauses Δ))
-    (Dec-is-nil? {xs = pr})
-
---- ==== RESOLUTION ====
-
--- TODO clause thm?
-
--- we deviate from the HoPLaAR algorithm here
--- by adding another `negate l ∈? c` check to drop trivial clauses from `pos`
--- to simplify termination by making the context always decreasing
-resolve-part : (l : Lit Γ) → CNF Γ
-             → CNF (rem (unlit l) Γ)
-             × CNF (rem (unlit l) Γ)
-             × CNF (rem (unlit l) Γ)
-resolve-part l []       = [] , [] , []
-resolve-part l (c ∷ cl) =
-  let (p , n , o) = resolve-part l cl in
-  Dec.rec
-    (λ l∈c →
-          Dec.rec
-            (λ n∈c → p)
-            (λ n∉c →   avoid-var-clause (remₗ l c)
-                         (λ u∈ → rec! (λ m m∈ → [ (λ l=m → ∉-rem-= {xs = c}
-                                                             (subst (_∈ remₗ l c)
-                                                                    (l=m ⁻¹)
-                                                                    (list-⊆ m∈)))
-                                                , (λ l=nm → n∉c (ope→subset filter-OPE
-                                                                    (subst (_∈ remₗ l c)
-                                                                           (negate-swap l=nm)
-                                                                           (list-⊆ m∈))))
-                                                ]ᵤ ∘ unlit-eq)
-                                      (mapₛ-∈ u∈))
-                     ∷ p)
-            (negate l ∈? c)
-        , n
-        , o)
-    (λ l∉c →
-       Dec.rec
-         (λ n∈c →   p
-                  ,   avoid-var-clause (remₗ (negate l) c)
-                        (λ u∈ → rec! (λ m m∈ → [ (λ l=m → l∉c (ope→subset filter-OPE
-                                                                  (subst (_∈ remₗ (negate l) c)
-                                                                         (l=m ⁻¹)
-                                                                         (list-⊆ m∈))) )
-                                                , (λ l=nm → ∉-rem-= {xs = c}
-                                                             (subst (_∈ remₗ (negate l) c)
-                                                                    (negate-swap l=nm)
-                                                                    (list-⊆ m∈)))
-                                                ]ᵤ ∘ unlit-eq)
-                                     (mapₛ-∈ u∈))
-                    ∷ n
-                  , o)
-         (λ n∉c →   p
-                  , n
-                  ,   List.map-with-∈ c
-                        (λ a a∈ → avoid-lit-var a
-                                    ([ (λ e → l∉c (subst (_∈ c) e a∈))
-                                     , (λ e → n∉c (subst (_∈ c) e a∈))
-                                     ]ᵤ ∘ unlit-eq ∘ _⁻¹))
-                    ∷ o)
-         (negate l ∈? c))
-    (l ∈? c)
-
-resolve-on : (l : Lit Γ) → CNF Γ → CNF (rem (unlit l) Γ)
-resolve-on p clauses =
-  let (pos , neg , other) = resolve-part p clauses
-      res = filter nontrivial? $ map² union pos neg
-    in
-  union other res
-
-resolution-blowup : CNF Γ → Lit Γ → ℕ × Lit Γ
-resolution-blowup cls l =
-  let m = length $ filter (List.has          l) cls
-      n = length $ filter (List.has $ negate l) cls
-    in
-  (m · n ∸ m ∸ n , l)
-
-resolution-rule : (c : CNF Γ) → ⌞ any positive (unions c) ⌟
-                → Σ[ l ꞉ Lit Γ ] (CNF (rem (unlit l) Γ))
-resolution-rule {Γ} clauses prf =
-  let mpvs = List⁺.from-list $ filter positive (unions clauses) in
-  Maybe.elim (λ m → mpvs ＝ m → Σ[ l ꞉ Lit Γ ] (CNF (rem (unlit l) Γ)))
-    (λ e → absurd ((so-not $
-                    List.none-filter {p = positive} {xs = unions clauses} $
-                    from-list-nothing e) prf))
-    (λ pvs _ → let p = snd $ foldr₁ (min-on fst) $
-                       map⁺ (resolution-blowup clauses) pvs
-                 in
-               p , resolve-on p clauses)
-    mpvs
-    refl
-
-resolution-pos : (c : CNF Γ)
-               → (∀ {l} → l ∈ unions c → negate l ∈ unions c)
-               → c ≠ []
-               → [] ∉ c
-               → Any (So ∘ positive) (unions c)
-resolution-pos  []           _  cne _   = absurd (cne refl)
-resolution-pos ([]      ∷ _) _  _   enc = absurd (enc (here refl))
-resolution-pos ((l ∷ _) ∷ _) pn _   _   =
-  Dec.rec
-    here
-    (  List.∈→Any (pn (here refl))
-     ∘ not-so
-     ∘ contra (subst So negative-negate))
-    (Dec-So {b = positive l})
-
 -- induction on context size
-CSI-ty : ℕ → 𝒰
-CSI-ty x = {Γ : Ctx} → x ＝ sizeₛ Γ
+DP-ty : ℕ → 𝒰
+DP-ty x = {Γ : Ctx} → x ＝ sizeₛ Γ
                      → CNF Γ → Bool
 
-dp-loop : ∀[ □ CSI-ty ⇒ CSI-ty ]
+dp-loop : ∀[ □ DP-ty ⇒ DP-ty ]
 dp-loop ih {Γ} e c =
   Dec.rec
     (λ _ → true)
@@ -314,10 +102,10 @@ dp-loop ih {Γ} e c =
                                       refl c′)
                         (one-lit-rule c))
               ([] ∈? c))
-    (Dec-is-nil? {xs = c})
+    (Dec-is-nil? c)
 
 dp : CNF Γ → Bool
-dp = Box.fix CSI-ty dp-loop refl
+dp = Box.fix DP-ty dp-loop refl
 
 dpsat : Formulaᵢ Γ → Bool
 dpsat = dp ∘ snd ∘ defcnfs

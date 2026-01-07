@@ -93,13 +93,13 @@ defstep op ih {Θ} p q e defs n =
       (Δq , (el2 , defs2 , n2)) = Box.call ih (<-≤-trans (≤-<-trans (=→≤ (height-nenf-wk q))
                                                                     (≤≃<suc $ r≤∪ {x = height-nenf p}))
                                                          (=→≤ (e ⁻¹)))
-                                              (wk-nenf (∈ₛ-∪∷←r {s₁ = Δp}) q) refl defs1 n1
-      d' = op (wk-elit (∈ₛ-∪∷←r {s₁ = Δq}) el1) el2
+                                              (wk-nenf (⊆-∪∷-r {s₁ = Δp}) q) refl defs1 n1
+      d' = op (wk-elit (⊆-∪∷-r {s₁ = Δq}) el1) el2
     in
   Maybe.rec
     -- add a new atom
     (let x = "p_" ++ₛ show-ℕ n2
-         v = Pos (av x (∈ₛ-∪∷←l {s₂ = Θ} (hereₛ {xs = Δq ∪∷ Δp} refl)))
+         v = Pos (av x (⊆-∪∷-l {s₂ = Θ} (hereₛ {xs = Δq ∪∷ Δp} refl)))
          s : (Δq ∪∷ Δp ∪∷ Θ) ⊆ ((x ∷ Δq ∪∷ Δp) ∪∷ Θ)
          s = λ {x = z} → subst (z ∈_) (∪∷-assoc (x ∷ Δq)) ∘ thereₛ
        in
@@ -179,8 +179,8 @@ NHIF-ty x = {Θ : Ctx} → (f : NENF Θ) → x ＝ height-nenf f
 -- induction on a height of a product of NENFs
 NHI×F-ty : ℕ → 𝒰
 NHI×F-ty x = {Θ : Ctx} → (p : NENF Θ) → (q : NENF Θ) → x ＝ 1 + max (height-nenf p) (height-nenf q)
-                      → FM Θ → ℕ
-                      → Σ[ Δ ꞉ Ctx ] (TripF (Δ ∪∷ Θ))
+                       → FM Θ → ℕ
+                       → Σ[ Δ ꞉ Ctx ] (TripF (Δ ∪∷ Θ))
 
 subcnf : ({Θ : Ctx} → Formulaᵢ Θ → Formulaᵢ Θ → Formulaᵢ Θ)
        → ∀[ □ NHIF-ty ⇒ NHI×F-ty ]
@@ -191,12 +191,12 @@ subcnf op ih {Θ} p q e defs n =
       (Δq , (f2 , defs2 , n2)) = Box.call ih (<-≤-trans (≤-<-trans (=→≤ (height-nenf-wk q))
                                                                     (≤≃<suc $ r≤∪ {x = height-nenf p}))
                                                          (=→≤ (e ⁻¹)))
-                                              (wk-nenf (∈ₛ-∪∷←r {s₁ = Δp}) q) refl defs1 n1
+                                              (wk-nenf (⊆-∪∷-r {s₁ = Δp}) q) refl defs1 n1
       s : (Δq ∪∷ Δp ∪∷ Θ) ⊆ ((Δq ∪∷ Δp) ∪∷ Θ)
       s = λ {x = z} → subst (z ∈_) (∪∷-assoc Δq)
     in
     Δq ∪∷ Δp
-  , op (wk (s ∘ ∈ₛ-∪∷←r {s₁ = Δq}) f1)
+  , op (wk (s ∘ ⊆-∪∷-r {s₁ = Δq}) f1)
        (wk  s                      f2)
   , wk-fm s defs2
   , n2
